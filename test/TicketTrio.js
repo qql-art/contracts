@@ -9,6 +9,14 @@ describe("TicketTrio", () => {
     const signers = await ethers.getSigners();
     expect(await ticketTrio.balanceOf(signers[0].address)).to.equal(10);
   });
+  it("tickets can be minted only once", async () => {
+    const TicketTrio = await ethers.getContractFactory("TicketTrio");
+    const ticketTrio = await TicketTrio.deploy(10);
+    await ticketTrio.deployed();
+    await ticketTrio.mintAll();
+    const again = ticketTrio.mintAll();
+    expect(again).to.be.revertedWith("tickets already minted");
+  });
   it("non-owner can't mint tickets", async () => {
     const TicketTrio = await ethers.getContractFactory("TicketTrio");
     const ticketTrio = await TicketTrio.deploy(10);

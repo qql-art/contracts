@@ -7,12 +7,15 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract TicketTrio is ERC721, Ownable, ERC721Burnable {
     uint256 maxSupply;
+    bool minted;
 
     constructor(uint256 _maxSupply) ERC721("TRNF Ticket Trio", "TRNF-T3") {
         maxSupply = _maxSupply;
     }
 
     function mintAll() external onlyOwner {
+        require(!minted, "tickets already minted");
+        minted = true;
         for (uint256 i = 0; i < maxSupply; i++) {
             _safeMint(msg.sender, i);
         }

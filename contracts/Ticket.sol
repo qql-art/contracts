@@ -16,11 +16,11 @@ contract Ticket is ERC721, Ownable {
         maxSupply = _maxSupply;
     }
 
-    function premint(uint256 numToMint) external onlyOwner {
+    function premint(uint256 numToMint, address recipient) external onlyOwner {
         require(numToMint % 3 == 0, "can only premint in batches of 3");
         require(auctionStartTimestamp == 0, "can't premint during auction");
         for (uint256 i = 0; i < numToMint; i++) {
-            _safeMint(msg.sender, minted);
+            _safeMint(recipient, minted);
             minted++;
         }
         require(minted <= maxSupply, "too many mints");
@@ -55,7 +55,7 @@ contract Ticket is ERC721, Ownable {
     }
 
     function mintAtAuction() public payable {
-        require(minted < maxSupply - 3, "minted out");
+        require(minted <= maxSupply - 3, "minted out");
         uint256 price = currentPrice();
         require(msg.value >= price, "must pay to mint");
         _safeMint(msg.sender, minted++);
@@ -63,8 +63,8 @@ contract Ticket is ERC721, Ownable {
         _safeMint(msg.sender, minted++);
     }
 
-    function withdrawFunds() external onlyOwner {
+    function withdrawFunds(address recipient) external onlyOwner {
         uint256 balance = address(this).balance;
-        payable(msg.sender).transfer(balance);
+        payable(recipient).transfer(balance);
     }
 }

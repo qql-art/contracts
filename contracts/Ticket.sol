@@ -10,15 +10,30 @@ contract Ticket is ERC721, Ownable {
     uint256[] prices;
     uint256 intervalTimeSecs;
     uint256 auctionStartTimestamp; // seconds since epoch, per block.timestamp
+    // Which address is empowered to burn tokens.
+    // Intended to be a permission given to the TRNF contract, so it can burn Tickets
+    // when it mints TRNFs.
+    address burner;
 
     constructor(uint256 _maxSupply) ERC721("TRNF Ticket", "TRNF-TIX") {
         require(_maxSupply % 3 == 0, "max supply must be multiple of 3");
         maxSupply = _maxSupply;
     }
 
-    function premint(uint256 numToMint, address recipient) external onlyOwner {
-        require(numToMint % 3 == 0, "can only premint in batches of 3");
-        require(auctionStartTimestamp == 0, "can't premint during auction");
+    function setBurner(address _burner) external onlyOwner {
+        burner = _burner;
+    }
+
+    function burn(uint256 tokenId) external {
+        require(msg.sender == burner, "only burner address can burn tokens");
+        _burn(tokenId);
+    }
+
+    function ownerMint(uint256 numToMint, address recipient)
+        external
+        onlyOwner
+    {
+        require(numToMint % 3 == 0, "can only ownerMint in batches of 3");
         for (uint256 i = 0; i < numToMint; i++) {
             _safeMint(recipient, minted);
             minted++;
@@ -30,7 +45,6 @@ contract Ticket is ERC721, Ownable {
         external
         onlyOwner
     {
-        require(auctionStartTimestamp == 0, "auction already started");
         require(_intervalTimeSecs > 0, "need positive interval time");
         require(_prices.length > 0, "need at least one price");
         prices = _prices;
@@ -39,11 +53,11 @@ contract Ticket is ERC721, Ownable {
     }
 
     // Returns current price for the dutch auction, if it is ongoing.
-    // If the auction has not started, it will return 0.
+    // If the auction has not started, it will max uint256
     // Will still return a price even after the auction is fully sold out.
     function currentPrice() public view returns (uint256) {
         if (auctionStartTimestamp == 0) {
-            return 0;
+            return 2**256 - 1;
         }
         uint256 intervalsElapsed = (block.timestamp - auctionStartTimestamp) /
             intervalTimeSecs;

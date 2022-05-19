@@ -15,10 +15,12 @@ describe("TRNF", () => {
       const ticket = await Ticket.deploy(9);
       await ticket.deployed();
       const trnf = await TRNF.deploy(ticket.address);
-      await ticket.setBurner(trnf.address);
       const signers = await ethers.getSigners();
       const a = signers[1];
       await ticket.ownerMint(3, a.address);
+      const fail = trnf.connect(a).mint(0, "foo");
+      await expect(fail).to.be.revertedWith("only burner address");
+      await ticket.setBurner(trnf.address);
       await trnf.connect(a).mint(0, "foo");
       expect(await trnf.balanceOf(a.address)).to.equal(1);
       const tokenData = await trnf.tokenData(0);

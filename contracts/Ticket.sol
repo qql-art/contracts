@@ -14,6 +14,7 @@ contract Ticket is ERC721, Ownable {
     // Intended to be a permission given to the TRNF contract, so it can burn Tickets
     // when it mints TRNFs.
     address burner;
+    string baseURI;
 
     constructor(uint256 _maxSupply) ERC721("TRNF Ticket", "TRNF-TIX") {
         require(_maxSupply % 3 == 0, "max supply must be multiple of 3");
@@ -27,6 +28,14 @@ contract Ticket is ERC721, Ownable {
     function burn(uint256 tokenId) external {
         require(msg.sender == burner, "only burner address can burn tokens");
         _burn(tokenId);
+    }
+
+    function setBaseURI(string memory _baseURI) external onlyOwner {
+        baseURI = _baseURI;
+    }
+
+    function _baseURI() internal view override returns (string memory) {
+        return baseURI;
     }
 
     function ownerMint(uint256 numToMint, address recipient)

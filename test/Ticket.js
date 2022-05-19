@@ -195,4 +195,17 @@ describe("Ticket", () => {
       startingBalance.add(exa.add(exa.div(2)))
     );
   });
+  it("token URIs work", async () => {
+    const signers = await ethers.getSigners();
+    const a = signers[1];
+    const ticket = await Ticket.deploy(9);
+    await ticket.deployed();
+    await ticket.ownerMint(3, a.address);
+    const fail = ticket.connect(a).setBaseURI("https://trnf.art/token/");
+    await expect(fail).to.be.revertedWith("owner");
+    await ticket.setBaseURI("https://trnf.art/token/");
+    expect(await ticket.tokenURI(0)).to.equal("https://trnf.art/token/0");
+    await ticket.setBaseURI("https://trnf2.art/token/");
+    expect(await ticket.tokenURI(0)).to.equal("https://trnf2.art/token/0");
+  });
 });

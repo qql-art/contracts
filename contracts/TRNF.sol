@@ -36,7 +36,7 @@ contract TRNF is ERC721, Ownable {
         scriptPieces[id] = data;
     }
 
-    modifier onlyTicketOwnerOrApproved (uint256 tokenId) {
+    modifier onlyTicketOwnerOrApproved(uint256 tokenId) {
         bool ownerOrApproved = false;
         address ticketOwner = ticket.ownerOf(tokenId);
         if (ticketOwner == msg.sender) {

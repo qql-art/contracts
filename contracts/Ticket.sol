@@ -5,16 +5,16 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract Ticket is ERC721, Ownable {
-    uint256 minted;
-    uint256 maxSupply;
-    uint256[] prices;
-    uint256 intervalTimeSecs;
-    uint256 auctionStartTimestamp; // seconds since epoch, per block.timestamp
+    uint256 private minted;
+    uint256 private maxSupply;
+    uint256[] private prices;
+    uint256 private intervalTimeSecs;
+    uint256 private auctionStartTimestamp; // seconds since epoch, per block.timestamp
     // Which address is empowered to burn tokens.
     // Intended to be a permission given to the TRNF contract, so it can burn Tickets
     // when it mints TRNFs.
-    address burner;
-    string baseURI;
+    address private burner;
+    string private baseURI;
 
     constructor(uint256 _maxSupply) ERC721("TRNF Ticket", "TRNF-TIX") {
         require(_maxSupply % 3 == 0, "max supply must be multiple of 3");

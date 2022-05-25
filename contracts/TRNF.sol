@@ -11,8 +11,8 @@ struct TokenData {
 }
 
 contract TRNF is ERC721, Ownable {
-    Ticket ticket;
-    string baseURI;
+    Ticket private ticket;
+    string private baseURI;
     mapping(uint256 => TokenData) public tokenData;
     mapping(uint256 => string) public scriptPieces;
 

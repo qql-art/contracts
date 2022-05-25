@@ -20,8 +20,8 @@ contract TRNF is ERC721, Ownable {
         ticket = _ticket;
     }
 
-    function setBaseURI(string memory _baseURI) external onlyOwner {
-        baseURI = _baseURI;
+    function setBaseURI(string memory baseURI_) external onlyOwner {
+        baseURI = baseURI_;
     }
 
     function _baseURI() internal view override returns (string memory) {

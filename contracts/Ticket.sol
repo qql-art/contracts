@@ -58,6 +58,15 @@ contract Ticket is ERC721, Ownable {
         require(_prices.length > 0, "need at least one price");
         prices = _prices;
         intervalTimeSecs = _intervalTimeSecs;
+        // solhint flags the following line due to its reliance on block time.
+        // It's possible that a malicious miner could alter the block time by a
+        // few seconds on the Ethereum network, but for our purposes, this is
+        // negligible.
+        //
+        // See the following:
+        //     https://stackoverflow.com/questions/71000103/
+        //
+        // solhint-disable-next-line not-rely-on-time
         auctionStartTimestamp = block.timestamp;
     }
 
@@ -68,6 +77,8 @@ contract Ticket is ERC721, Ownable {
         if (auctionStartTimestamp == 0) {
             return 2**256 - 1;
         }
+        // See above comment on solhint flagging reliance on block time.
+        // solhint-disable-next-line not-rely-on-time
         uint256 intervalsElapsed = (block.timestamp - auctionStartTimestamp) /
             intervalTimeSecs;
         uint256 lastInterval = prices.length - 1;

@@ -43,11 +43,11 @@ contract Ticket is ERC721, Ownable {
         onlyOwner
     {
         require(numToMint % 3 == 0, "can only ownerMint in batches of 3");
+        require((minted + numToMint) <= maxSupply, "too many mints");
         for (uint256 i = 0; i < numToMint; i++) {
             _safeMint(recipient, minted);
             minted++;
         }
-        require(minted <= maxSupply, "too many mints");
     }
 
     function startAuction(uint256[] memory _prices, uint256 _intervalTimeSecs)

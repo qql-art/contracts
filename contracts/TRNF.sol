@@ -36,8 +36,8 @@ contract TRNF is ERC721, Ownable {
         scriptPieces[id] = data;
     }
 
-    function mint(uint256 tokenId, string memory data) external {
-        bool ownerOrApproved;
+    modifier onlyTicketOwnerOrApproved (uint256 tokenId) {
+        bool ownerOrApproved = false;
         address ticketOwner = ticket.ownerOf(tokenId);
         if (ticketOwner == msg.sender) {
             ownerOrApproved = true;
@@ -50,6 +50,13 @@ contract TRNF is ERC721, Ownable {
             ownerOrApproved,
             "prospective minter is not owner or approved for ticket"
         );
+        _;
+    }
+
+    function mint(uint256 tokenId, string memory data)
+        external
+        onlyTicketOwnerOrApproved(tokenId)
+    {
         ticket.burn(tokenId);
         _safeMint(msg.sender, tokenId);
         tokenData[tokenId] = TokenData({minter: msg.sender, data: data});

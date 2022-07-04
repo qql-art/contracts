@@ -65,8 +65,8 @@ describe("Shardwallet", () => {
         { shareMicros: 200000, recipient: alice.address },
       ]);
       await expect(split)
-        .to.emit(sw, "Split")
-        .withArgs(1, 2, [500000, 300000, 200000]);
+        .to.emit(sw, "Reforging")
+        .withArgs([1], 2, [500000, 300000, 200000]);
 
       expect(await sw.callStatic.computeClaimed(2, ETH)).to.equal(500);
       expect(await sw.callStatic.computeClaimed(3, ETH)).to.equal(300);
@@ -87,7 +87,9 @@ describe("Shardwallet", () => {
       expect(await sw.callStatic.computeClaimed(4, ETH)).to.equal(200);
 
       const merge = await sw.merge([2, 3, 4]);
-      await expect(merge).to.emit(sw, "Merge").withArgs(5, [2, 3, 4]);
+      await expect(merge)
+        .to.emit(sw, "Reforging")
+        .withArgs([2, 3, 4], 5, [1000000]);
       expect(await sw.callStatic.computeClaimed(5, ETH)).to.equal(1080);
 
       // Claim the 20 wei left over from shard 4, plus 10 new wei.
@@ -139,6 +141,39 @@ describe("Shardwallet", () => {
       expect(await sw.callStatic.computeClaimed(8, ETH)).to.equal(7);
       expect(await sw.callStatic.computeClaimed(9, ETH)).to.equal(2);
       expect(await sw.callStatic.computeClaimed(10, ETH)).to.equal(1);
+    });
+
+    it("properly distributes claims with multiple parents and children", async () => {
+      const [alice] = await ethers.getSigners();
+      const bob = ethers.Wallet.createRandom().connect(alice.provider);
+      const sw = await Shardwallet.deploy();
+
+      await alice.sendTransaction({ to: sw.address, value: 2 });
+
+      await sw.split(1, [
+        { shareMicros: 500000, recipient: alice.address },
+        { shareMicros: 500000, recipient: alice.address },
+      ]);
+      await sw.claimTo(2, [ETH], bob.address);
+      await sw.claimTo(3, [ETH], bob.address);
+      await sw.reforge(
+        [2, 3],
+        [
+          { shareMicros: 500000, recipient: alice.address },
+          { shareMicros: 500000, recipient: alice.address },
+        ]
+      );
+
+      // Shards 4 and 5 each have shards 2 and 3 as parents, and each parent
+      // has claimed 1 unit. In isolation, any single parent would pass down
+      // this claim to shard 5 (breaking a tie). But combined, the distribution
+      // should be (1, 1), not (0, 2).
+      //
+      // That is, `computeClaimed` must call `splitClaim` just once after
+      // adding the `claimed` values for each parent, rather than calling
+      // `splitClaim` once per parent and adding the results.
+      expect(await sw.callStatic.computeClaimed(4, ETH)).to.equal(1);
+      expect(await sw.callStatic.computeClaimed(5, ETH)).to.equal(1);
     });
   });
 });

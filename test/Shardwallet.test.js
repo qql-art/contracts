@@ -18,12 +18,19 @@ describe("Shardwallet", () => {
       const sw = await Shardwallet.deploy();
       const erc20 = await TestERC20.deploy();
 
+      expect(await sw.getParents(0)).to.deep.equal([]);
+      expect(await sw.getParents(1)).to.deep.equal([]);
+      expect(await sw.getShareMicros(1)).to.equal(1000000);
+
       await expect(sw.deployTransaction)
         .to.emit(sw, "Transfer")
         .withArgs(ethers.constants.AddressZero, alice.address, 1);
 
       await alice.sendTransaction({ to: sw.address, value: 100 });
       await erc20.mint(sw.address, 500);
+
+      expect(await sw.getDistributed(ETH)).to.equal(0);
+      expect(await sw.getDistributed(erc20.address)).to.equal(0);
 
       // Deposit some ETH and ERC-20s, then claim.
       const claim1 = sw.claimTo(1, [ETH, erc20.address], bob.address);
@@ -32,6 +39,8 @@ describe("Shardwallet", () => {
       await expect(claim1).to.emit(sw, "Claim").withArgs(1, erc20.address, 500);
       expect(await bob.getBalance()).to.equal(100);
       expect(await erc20.balanceOf(bob.address)).to.equal(500);
+      expect(await sw.getDistributed(ETH)).to.equal(100);
+      expect(await sw.getDistributed(erc20.address)).to.equal(500);
 
       // Claim with no new funds.
       const claim2 = sw.claimTo(1, [ETH, erc20.address], bob.address);
@@ -98,6 +107,18 @@ describe("Shardwallet", () => {
         .to.emit(sw, "Claim")
         .withArgs(5, ETH, 30);
       expect(await bob.getBalance()).to.equal(1110);
+
+      // Check accessors that are meant to operate for even inactive shards.
+      expect(await sw.getParents(1)).to.deep.equal([]);
+      expect(await sw.getParents(2)).to.deep.equal(
+        [1].map(ethers.BigNumber.from)
+      );
+      expect(await sw.getParents(5)).to.deep.equal(
+        [2, 3, 4].map(ethers.BigNumber.from)
+      );
+      expect(await sw.getShareMicros(1)).to.equal(1000000);
+      expect(await sw.getShareMicros(2)).to.equal(500000);
+      expect(await sw.getShareMicros(5)).to.equal(1000000);
     });
 
     it("prohibits merging a shard with itself", async () => {

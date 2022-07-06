@@ -49,6 +49,25 @@ struct SplitRequest {
     address recipient;
 }
 
+/// A wallet that divides a stream of revenue into *shards*, with a
+/// distribution that may be altered at runtime by the shardbearers. Each shard
+/// is entitled to some integer number of millionths of the ETH and ERC-20
+/// tokens sent to this wallet. This number is called its *share*. Initially,
+/// there is a single genesis shard that is entitled to the entire stream. At
+/// any point, a shard may be split into child shards with an arbitrary
+/// distribution of the parent's share, and child shards may be merged back
+/// together by a common owner/operator.
+///
+/// When created, a shard is assigned an ID, and an ERC-721 token with the same
+/// ID is minted. As long as that ERC-721 token exists, we say that the shard
+/// is "active". A shard becomes inactive when it is reforged into one or more
+/// child shards. That is, a shard is active if and only if it is not a parent
+/// of any other shard.
+///
+/// Methods on this contract use the parameter name `tokenId` when referring to
+/// a shard that must be active, or `shardId` to refer to any shard. Any
+/// parameter of type `IERC20` may be `address(0)` to denote ETH or a non-zero
+/// address to denote an ERC-20 token.
 contract Shardwallet is ERC721 {
     using OptionalUints for OptionalUint;
 
@@ -62,12 +81,17 @@ contract Shardwallet is ERC721 {
 
     mapping(IERC20 => uint256) distributed_;
 
+    /// Emitted when the given parent shards are reforged into one or more
+    /// children with a new distribution of shares.
     event Reforging(
         uint256[] parents,
         uint256 firstChildId,
         uint256[] childrenSharesMicros
     );
 
+    /// Emitted when a shardbearer claims revenues for a given currency. This
+    /// event is emitted even when the `amount` is zero (though in that case no
+    /// call to transfer ether or ERC-20s will actually be made).
     event Claim(
         uint256 indexed tokenId,
         IERC20 indexed currency,
@@ -91,14 +115,22 @@ contract Shardwallet is ERC721 {
         return "SHARD";
     }
 
+    /// Combines one or more shards and redistributes their share to one or
+    /// more children. The parents must all be distinct, active shards, and the
+    /// caller must be an owner or operator of each parent. The total shares of
+    /// the children must add to the total shares of the parents.
+    ///
+    /// The children are assigned consecutive IDs, with the same order as given
+    /// by `splits`. The return value is the ID of the first child shard.
     function reforge(uint256[] memory parents, SplitRequest[] memory splits)
         public
+        returns (uint256 firstChildId)
     {
         if (parents.length == 0) {
             // Don't allow arbitrary callers to mint zero-share tokens.
             revert("Shardwallet: no parents");
         }
-        uint256 firstChildId = nextTokenId_;
+        firstChildId = nextTokenId_;
         nextTokenId_ = firstChildId + splits.length;
 
         uint256 totalShareMicros = 0;
@@ -145,31 +177,49 @@ contract Shardwallet is ERC721 {
         for (uint256 i = 0; i < splits.length; i++) {
             _safeMint(splits[i].recipient, nextTokenId++);
         }
+
+        return firstChildId;
     }
 
-    function split(uint256 tokenId, SplitRequest[] memory splits) external {
+    /// Splits a shard into one or more child shards, with shares and ownership
+    /// distributed according to `splits`. The caller must be an owner or
+    /// operator of the parent shard.
+    ///
+    /// The children are assigned consecutive IDs, with the same order as given
+    /// by `splits`. The return value is the ID of the first child shard.
+    function split(uint256 tokenId, SplitRequest[] memory splits)
+        external
+        returns (uint256 firstChildId)
+    {
         uint256[] memory parents = new uint256[](1);
         parents[0] = tokenId;
-        reforge(parents, splits);
+        return reforge(parents, splits);
     }
 
-    function merge(uint256[] memory parents) external {
-        uint256 shareMicros = 0;
+    /// Merges multiple shards into one new shard, owned by the caller. The
+    /// parents must all be distinct, active shards, and the caller must be an
+    /// owner or operator of each parent.
+    ///
+    /// The return value includes the new shard's ID and share, which equals
+    /// the combined shares of all the parents.
+    function merge(uint256[] memory parents)
+        external
+        returns (uint256 child, uint256 shareMicros)
+    {
+        shareMicros = 0;
         for (uint256 i = 0; i < parents.length; i++) {
             shareMicros += shareMicros_[parents[i]];
         }
         SplitRequest[] memory splits = new SplitRequest[](1);
         splits[0].recipient = msg.sender;
         splits[0].shareMicros = shareMicros;
-        reforge(parents, splits);
+        return (reforge(parents, splits), shareMicros);
     }
 
-    /**
-     * Returns the portion of `amount` that should be allocated to the child at
-     * `childIndex` among `shares`. When computed for each `childIndex` from
-     * `0` through `shares.length - 1`, the results sum to `amount` and are
-     * distributed according to `shares` to within 0.5 ulp.
-     */
+    /// Returns the portion of `amount` that should be allocated to the child
+    /// at `childIndex` among `shares`. When computed for each `childIndex`
+    /// from `0` through `shares.length - 1`, the results sum to `amount` and
+    /// are distributed according to `shares` to within 0.5 ulp.
     function splitClaim(
         uint256 amount,
         uint256[] memory shareMicros,
@@ -207,33 +257,44 @@ contract Shardwallet is ERC721 {
         return result;
     }
 
-    function computeClaimed(uint256 tokenId, IERC20 currency)
+    /// Computes and stores the amount of the given currency that the given
+    /// shard has claimed, including any claim or partial claim inherited from
+    /// the shard's parents.
+    ///
+    /// It is valid and can be useful to call this method even if the given
+    /// shard is no longer active. For instance, if an active shard has a long
+    /// line of ancestors, and no ancestor has an explicit claim record for a
+    /// currency, then attempting to directly compute the claim for the active
+    /// shard may run out of gas or overflow the stack. Instead, any caller can
+    /// split this computation into multiple calls or transactions, by first
+    /// computing the claim for some ancestor.
+    function computeClaimed(uint256 shardId, IERC20 currency)
         public
         returns (uint256)
     {
         {
-            OptionalUint cr = claimRecord_[currency][tokenId];
+            OptionalUint cr = claimRecord_[currency][shardId];
             if (cr.isPresent()) return cr.decode();
         }
-        if (tokenId == 1) {
+        if (shardId == 1) {
             // Genesis token: no parents, so no claim to inherit. This token
             // can't quite use the normal logic because it has no parents and
             // no forging data, so we special-case it here, and don't bother
             // storing the result.
             return 0;
         }
-        if (shareMicros_[tokenId] == 0) {
+        if (shareMicros_[shardId] == 0) {
             // No claim, but do not store, as this token could later be created
             // as a child of a token that *has* claimed.
             return 0;
         }
 
-        uint256 firstSibling = firstSibling_[tokenId];
+        uint256 firstSibling = firstSibling_[shardId];
         ForgingData memory forging = forging_[firstSibling];
-        if (tokenId < firstSibling) {
+        if (shardId < firstSibling) {
             revert("Shardwallet: child too low");
         }
-        uint256 childIndex = tokenId - firstSibling;
+        uint256 childIndex = shardId - firstSibling;
         if (childIndex >= forging.childrenSharesMicros.length) {
             revert("Shardwallet: child too high");
         }
@@ -252,7 +313,7 @@ contract Shardwallet is ERC721 {
             forging.childrenSharesMicros,
             childIndex
         );
-        claimRecord_[currency][tokenId] = OptionalUints.encode(claimed);
+        claimRecord_[currency][shardId] = OptionalUints.encode(claimed);
         return claimed;
     }
 
@@ -306,6 +367,9 @@ contract Shardwallet is ERC721 {
         }
     }
 
+    /// Claims payments in the given currencies on behalf of the given shard,
+    /// sending the funds to `recipient`. The caller must be an owner or
+    /// approved operator for the given shard.
     function claimTo(
         uint256 tokenId,
         IERC20[] calldata currencies,
@@ -316,11 +380,42 @@ contract Shardwallet is ERC721 {
         }
     }
 
+    /// Claims payments in the given currencies on behalf of the given shard,
+    /// sending the funds to the caller. The caller must be an owner or
+    /// approved operator for the given shard. This is a convenience method for
+    /// `claimTo` where `recipient == msg.sender`.
     function claim(uint256 tokenId, IERC20[] calldata currencies) external {
         claimTo(tokenId, currencies, payable(msg.sender));
     }
 
-    function getShareMicros(uint256 tokenId) external view returns (uint256) {
-        return shareMicros_[tokenId];
+    /// Gets the share of the pot allotted to the given shard, in micros. For
+    /// example, a return value of `500000` indicates that the shard is
+    /// entitled to 50% of the funds that the wallet receives.
+    ///
+    /// The ERC-721 token for the shard may have been burned, in which case
+    /// this method returns historical data. If the shard has never existed,
+    /// the result is `0` (which is not a valid return value for a shard that
+    /// has existed, since each shard must have a positive share). This method
+    /// never reverts.
+    function getShareMicros(uint256 shardId) external view returns (uint256) {
+        return shareMicros_[shardId];
+    }
+
+    /// Gets the parent shards of the given shard.
+    ///
+    /// The result is an empty array if `shardId == 1` (the genesis shard has
+    /// no parents) or if the shard has never existed.
+    function getParents(uint256 shardId)
+        external
+        view
+        returns (uint256[] memory)
+    {
+        return forging_[firstSibling_[shardId]].parents;
+    }
+
+    /// Gets the number of units of the given currency that have been
+    /// distributed to shards.
+    function getDistributed(IERC20 currency) external view returns (uint256) {
+        return distributed_[currency];
     }
 }

@@ -175,5 +175,144 @@ describe("Shardwallet", () => {
       expect(await sw.callStatic.computeClaimed(4, ETH)).to.equal(1);
       expect(await sw.callStatic.computeClaimed(5, ETH)).to.equal(1);
     });
+
+    it("behaves reasonably under a realistic sequence of operations", async () => {
+      const [deployer] = await ethers.getSigners();
+      const [alice, bob, camille, dolores] = Array(4)
+        .fill()
+        .map(() => ethers.Wallet.createRandom().connect(deployer.provider));
+      const sw = await Shardwallet.deploy();
+      const weth9 = await TestERC20.deploy();
+      const dai = await TestERC20.deploy();
+
+      // Give each signer some amount of gas money, and keep track of how much
+      // gas they spend so that we can check that they've been distributed the
+      // right amount of ETH.
+      const gasFunds = new Map();
+      for (const signer of [alice, bob, camille, dolores]) {
+        const value = ethers.constants.WeiPerEther;
+        await deployer.sendTransaction({ to: signer.address, value });
+        gasFunds.set(signer.address, value);
+      }
+      async function countGas(txOrRx) {
+        const rx = txOrRx.gasUsed != null ? txOrRx : await txOrRx.wait();
+        const fee = rx.gasUsed.mul(rx.effectiveGasPrice);
+        gasFunds.set(rx.from, gasFunds.get(rx.from).sub(fee));
+      }
+
+      await sw.split(1, [
+        { shareMicros: 500000, recipient: alice.address },
+        { shareMicros: 500000, recipient: bob.address },
+      ]);
+      await sw
+        .connect(bob)
+        .split(3, [
+          { shareMicros: 300000, recipient: bob.address },
+          { shareMicros: 100000, recipient: camille.address },
+          { shareMicros: 100000, recipient: dolores.address },
+        ])
+        .then(countGas);
+      const shards = [
+        { shard: 2, bearer: alice, percent: 50 },
+        { shard: 4, bearer: bob, percent: 30 },
+        { shard: 5, bearer: camille, percent: 10 },
+        { shard: 6, bearer: dolores, percent: 10 },
+      ];
+
+      // With a continuous incoming stream of funds, claim different amounts at
+      // a time by different shards, in a triangular pattern.
+      const justOver1Eth = ethers.BigNumber.from("1234567890123456789");
+      for (let i = 0; i <= shards.length; i++) {
+        await deployer.sendTransaction({ to: sw.address, value: justOver1Eth });
+        await weth9.mint(sw.address, justOver1Eth);
+        for (const { shard, bearer } of shards.slice(0, i)) {
+          await sw
+            .connect(bearer)
+            .claim(shard, [ETH, weth9.address])
+            .then(countGas);
+        }
+      }
+
+      {
+        const received = justOver1Eth.mul(shards.length + 1);
+        const balances = await Promise.all(
+          shards.map(async ({ bearer, percent }) => ({
+            bearer,
+            expected: received.mul(percent).div(100), // rounded down
+            actualEth: await bearer
+              .getBalance()
+              .then((b) => b.sub(gasFunds.get(bearer.address))),
+            actualWeth9: await weth9.balanceOf(bearer.address),
+          }))
+        );
+        expect(
+          balances.map((x) => ({
+            address: x.bearer.address,
+            eth: String(x.actualEth),
+            weth9: String(x.actualWeth9),
+          }))
+        ).to.deep.equal(
+          balances.map((x) => ({
+            address: x.bearer.address,
+            eth: String(x.expected),
+            weth9: String(x.expected),
+          }))
+        );
+        const distributed = balances.reduce(
+          (acc, b) => acc.add(b.expected),
+          ethers.constants.Zero
+        );
+        const dust = received.sub(distributed);
+        expect(dust).to.be.lt(10).and.gt(0);
+        expect(await deployer.provider.getBalance(sw.address)).to.equal(dust);
+      }
+
+      // Then, introduce a new currency to the mix while reforging the shards.
+      const oneMillionDollars = ethers.BigNumber.from(10n ** (6n + 18n));
+      await dai.mint(sw.address, oneMillionDollars);
+
+      expect(shards.pop().shard).to.equal(6);
+      await sw
+        .connect(dolores)
+        .split(6, [
+          { shareMicros: 80000, recipient: dolores.address },
+          { shareMicros: 20000, recipient: dolores.address },
+        ])
+        .then(countGas);
+      shards.push({ shard: 7, bearer: dolores, percent: 8 });
+      shards.push({ shard: 8, bearer: dolores, percent: 2 });
+      await sw.connect(dolores).claim(7, [dai.address]).then(countGas);
+      await sw
+        .connect(dolores)
+        .merge([shards.pop().shard, shards.pop().shard])
+        .then(countGas);
+      shards.push({ shard: 9, bearer: dolores, percent: 10 });
+      // At this point, Dolores's shard has claimed 80% of its share of the
+      // DAI, while the other shards have claimed none. Bring those all up.
+      for (const { shard, bearer } of shards) {
+        await sw.connect(bearer).claim(shard, [dai.address]).then(countGas);
+      }
+
+      {
+        const balances = await Promise.all(
+          shards.map(async ({ bearer, percent }) => ({
+            bearer,
+            expected: oneMillionDollars.mul(percent).div(100),
+            actual: await dai.balanceOf(bearer.address),
+          }))
+        );
+        expect(
+          balances.map((x) => ({
+            address: x.bearer.address,
+            dai: String(x.actual),
+          }))
+        ).to.deep.equal(
+          balances.map((x) => ({
+            address: x.bearer.address,
+            dai: String(x.expected),
+          }))
+        );
+      }
+    });
   });
 });

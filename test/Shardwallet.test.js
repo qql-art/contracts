@@ -336,4 +336,40 @@ describe("Shardwallet", () => {
       }
     });
   });
+
+  describe("edge cases", () => {
+    it("overflows the stack when computing a deep enough claim, recoverably", async () => {
+      const [alice] = await ethers.getSigners();
+      const sw = await Shardwallet.deploy();
+      let shard = 1;
+      while (true) {
+        const reverts = await sw.callStatic
+          .computeClaimed(shard, ETH)
+          .then(() => false)
+          .catch(() => true);
+        if (reverts) break;
+        // The EVM has a stack size limit of 1024 entries, and each frame of
+        // `computeClaimed` uses at least a few words, so we should be able to
+        // induce a stack overflow before too long.
+        if (shard > 1024) throw new Error("couldn't induce stack overflow");
+        for (let i = 0; i < 32; i++) {
+          await sw.split(shard, [
+            { shareMicros: 1000000, recipient: alice.address },
+          ]);
+          shard++;
+        }
+      }
+
+      // Directly computing the claim reverts.
+      await expect(sw.callStatic.computeClaimed(shard, ETH)).to.be.reverted;
+      // But if we first populate the results for some ancestors...
+      for (let i = 0; i < shard; i += 64) {
+        await sw.computeClaimed(i, ETH);
+        const claim = await sw.callStatic.computeClaimed(i, ETH).then(String);
+        expect({ i, claim }).to.deep.equal({ i, claim: "0" });
+      }
+      // ...then we can eventually get the right answer.
+      expect(await sw.callStatic.computeClaimed(shard, ETH)).to.equal(0);
+    });
+  });
 });

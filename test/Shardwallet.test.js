@@ -393,6 +393,43 @@ describe("Shardwallet", () => {
       });
     });
 
+    it("distributes what it can if ERC-20 balance has been reduced", async () => {
+      const [alice] = await ethers.getSigners();
+      const sw = await Shardwallet.deploy();
+      const erc20 = await TestERC20.deploy();
+
+      await sw.split(1, [
+        { shareMicros: 800000, recipient: alice.address }, // shard 2
+        { shareMicros: 200000, recipient: alice.address }, // shard 3
+      ]);
+      await erc20.mint(sw.address, 1000000);
+      await expect(sw.claim(2, [erc20.address]))
+        .to.emit(sw, "Claim")
+        .withArgs(2, erc20.address, 800000);
+
+      // Suppose that the ERC-20 token has some owner override that allows
+      // burning tokens of an arbitrary account. Then the Shardwallet should
+      // still try to withdraw what it can.
+      await erc20.burn(sw.address, 100000); // 200k -> 100k
+      await expect(sw.claim(3, [erc20.address]))
+        .to.emit(sw, "Claim")
+        .withArgs(3, erc20.address, 100000); // all that's available
+      expect(await sw.callStatic.computeClaimed(3, erc20.address)).to.equal(
+        100000
+      );
+      expect(await sw.getDistributed(erc20.address)).to.equal(900000);
+
+      // Now, recover the burned 100k and add another 1M; the wallet should
+      // return to equilibrium.
+      await erc20.mint(sw.address, 1100000);
+      await expect(sw.claim(3, [erc20.address]))
+        .to.emit(sw, "Claim")
+        .withArgs(3, erc20.address, 300000); // 100k recovered, 200k new
+
+      expect(await erc20.balanceOf(alice.address)).to.equal(1200000);
+      expect(await erc20.balanceOf(sw.address)).to.equal(800000);
+    });
+
     it("overflows the stack when computing a deep enough claim, recoverably", async () => {
       const [alice] = await ethers.getSigners();
       const sw = await Shardwallet.deploy();

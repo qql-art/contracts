@@ -338,6 +338,61 @@ describe("Shardwallet", () => {
   });
 
   describe("edge cases", () => {
+    describe("uint64 truncation of shard IDs", () => {
+      // Share chain state for these tests, since they only make static calls.
+      let alice, swStatic;
+      let smallShard, largeShard;
+      before(async () => {
+        [alice] = await ethers.getSigners();
+        const sw = await Shardwallet.deploy();
+        await sw.merge([1]);
+        smallShard = ethers.BigNumber.from(2);
+        largeShard = smallShard.add(ethers.BigNumber.from(2).pow(64));
+        await alice.sendTransaction({ to: sw.address, value: 1000000 });
+        await sw.claim(smallShard, [ETH]);
+        swStatic = sw.callStatic;
+      });
+
+      it("refuses to split a large shard", async () => {
+        await expect(
+          swStatic.split(largeShard, [
+            { shareMicros: 1000000, recipient: alice.address },
+          ])
+        ).to.be.revertedWith("ERC721:");
+      });
+
+      it("refuses to merge a large shard", async () => {
+        await expect(swStatic.merge([largeShard])).to.be.revertedWith(
+          "ERC721:"
+        );
+      });
+
+      it("refuses to claim for a large shard", async () => {
+        await expect(swStatic.claim(largeShard, [ETH])).to.be.revertedWith(
+          "ERC721:"
+        );
+      });
+
+      it("reports zero claim for a large shard", async () => {
+        expect(await swStatic.computeClaimed(smallShard, ETH)).to.equal(
+          1000000
+        );
+        expect(await swStatic.computeClaimed(largeShard, ETH)).to.equal(0);
+      });
+
+      it("reports zero share for a large shard", async () => {
+        expect(await swStatic.getShareMicros(smallShard)).to.equal(1000000);
+        expect(await swStatic.getShareMicros(largeShard)).to.equal(0);
+      });
+
+      it("reports no parents for a large shard", async () => {
+        expect(await swStatic.getParents(smallShard)).to.deep.equal([
+          ethers.BigNumber.from(1),
+        ]);
+        expect(await swStatic.getParents(largeShard)).to.deep.equal([]);
+      });
+    });
+
     it("overflows the stack when computing a deep enough claim, recoverably", async () => {
       const [alice] = await ethers.getSigners();
       const sw = await Shardwallet.deploy();

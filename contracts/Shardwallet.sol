@@ -41,11 +41,11 @@ library OptionalUints {
 
 struct ForgingData {
     uint256[] parents;
-    uint256[] childrenSharesMicros;
+    uint24[] childrenSharesMicros;
 }
 
 struct SplitRequest {
-    uint256 shareMicros;
+    uint24 shareMicros;
     address recipient;
 }
 
@@ -71,10 +71,10 @@ struct SplitRequest {
 contract Shardwallet is ERC721 {
     using OptionalUints for OptionalUint;
 
-    uint256 internal constant ONE_MILLION = 1000000;
+    uint24 internal constant ONE_MILLION = 1000000;
 
     uint256 nextTokenId_;
-    mapping(uint256 => uint256) shareMicros_;
+    mapping(uint256 => uint24) shareMicros_;
     mapping(uint256 => uint256) firstSibling_;
     mapping(uint256 => ForgingData) forging_; // keyed by ID of first child
     mapping(IERC20 => mapping(uint256 => OptionalUint)) claimRecord_;
@@ -86,7 +86,7 @@ contract Shardwallet is ERC721 {
     event Reforging(
         uint256[] parents,
         uint256 firstChildId,
-        uint256[] childrenSharesMicros
+        uint24[] childrenSharesMicros
     );
 
     /// Emitted when a shardbearer claims revenues for a given currency. This
@@ -133,7 +133,7 @@ contract Shardwallet is ERC721 {
         firstChildId = nextTokenId_;
         nextTokenId_ = firstChildId + splits.length;
 
-        uint256 totalShareMicros = 0;
+        uint24 totalShareMicros = 0;
         for (uint256 i = 0; i < parents.length; i++) {
             uint256 parent = parents[i];
             if (!_isApprovedOrOwner(msg.sender, parent)) {
@@ -143,10 +143,10 @@ contract Shardwallet is ERC721 {
             totalShareMicros += shareMicros_[parent];
         }
 
-        uint256[] memory childrenSharesMicros = new uint256[](splits.length);
+        uint24[] memory childrenSharesMicros = new uint24[](splits.length);
         uint256 nextTokenId = firstChildId;
         for (uint256 i = 0; i < splits.length; i++) {
-            uint256 micros = splits[i].shareMicros;
+            uint24 micros = splits[i].shareMicros;
             if (micros == 0) {
                 revert("Shardwallet: null share");
             }
@@ -204,16 +204,23 @@ contract Shardwallet is ERC721 {
     /// the combined shares of all the parents.
     function merge(uint256[] memory parents)
         external
-        returns (uint256 child, uint256 shareMicros)
+        returns (uint256 child, uint24 shareMicros)
     {
-        shareMicros = 0;
+        uint256 shareMicrosWord = 0;
         for (uint256 i = 0; i < parents.length; i++) {
-            shareMicros += shareMicros_[parents[i]];
+            shareMicrosWord += shareMicros_[parents[i]];
         }
+        shareMicros = uint24(shareMicrosWord);
         SplitRequest[] memory splits = new SplitRequest[](1);
         splits[0].recipient = msg.sender;
         splits[0].shareMicros = shareMicros;
-        return (reforge(parents, splits), shareMicros);
+        child = reforge(parents, splits);
+        if (shareMicrosWord != shareMicros) {
+            // Shouldn't be possible, since `reforge` succeeding means that
+            // there weren't any duplicates in the parents list.
+            revert();
+        }
+        return (child, shareMicros);
     }
 
     /// Returns the portion of `amount` that should be allocated to the child
@@ -222,7 +229,7 @@ contract Shardwallet is ERC721 {
     /// are distributed according to `shares` to within 0.5 ulp.
     function splitClaim(
         uint256 amount,
-        uint256[] memory shareMicros,
+        uint24[] memory shareMicros,
         uint256 childIndex
     ) internal pure returns (uint256) {
         uint256 n = shareMicros.length;
@@ -325,7 +332,7 @@ contract Shardwallet is ERC721 {
         if (!_isApprovedOrOwner(msg.sender, tokenId)) {
             revert("Shardwallet: unauthorized");
         }
-        uint256 shareMicros = shareMicros_[tokenId];
+        uint24 shareMicros = shareMicros_[tokenId];
 
         uint256 balance;
         if (address(currency) == address(0)) {

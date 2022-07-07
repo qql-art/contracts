@@ -39,9 +39,10 @@ library OptionalUints {
     }
 }
 
-struct ForgingData {
-    uint64[] parents;
-    uint24[] childrenSharesMicros;
+struct ShardData {
+    uint24 shareMicros;
+    uint64 firstSibling;
+    uint64 numSiblings; // including self
 }
 
 struct SplitRequest {
@@ -85,9 +86,8 @@ contract Shardwallet is ERC721 {
     uint24 internal constant ONE_MILLION = 1000000;
 
     uint64 nextTokenId_;
-    mapping(uint64 => uint24) shareMicros_;
-    mapping(uint64 => uint64) firstSibling_;
-    mapping(uint64 => ForgingData) forging_; // keyed by ID of first child
+    mapping(uint64 => ShardData) shardData_;
+    mapping(uint64 => uint64[]) parents_; // keyed by ID of first child
     mapping(IERC20 => mapping(uint64 => OptionalUint)) claimRecord_;
 
     mapping(IERC20 => uint256) distributed_;
@@ -111,8 +111,12 @@ contract Shardwallet is ERC721 {
 
     constructor() ERC721("", "") {
         nextTokenId_ = 2;
-        shareMicros_[1] = ONE_MILLION;
-        // (The genesis token doesn't have a `firstSibling_` or `forging_`.)
+        shardData_[1] = ShardData({
+            shareMicros: ONE_MILLION,
+            firstSibling: 1,
+            numSiblings: 1
+        });
+        // (`parents_[1]` is empty by default, which is correct.)
         _safeMint(msg.sender, 1);
     }
 
@@ -167,8 +171,9 @@ contract Shardwallet is ERC721 {
                 revert();
             }
             parents64[i] = parent64;
-            totalShareMicros += shareMicros_[parent64];
+            totalShareMicros += shardData_[parent64].shareMicros;
         }
+        parents_[firstChildId] = parents64;
 
         uint24[] memory childrenSharesMicros = new uint24[](splits.length);
         uint64 nextTokenId = firstChildId;
@@ -183,17 +188,18 @@ contract Shardwallet is ERC721 {
             totalShareMicros -= micros;
             childrenSharesMicros[i] = micros;
             uint64 child = nextTokenId++;
-            shareMicros_[child] = micros;
-            firstSibling_[child] = firstChildId;
+            // Cast is lossless because `firstChildId + splits.length` was
+            // previously shown to fit in a `uint64`.
+            shardData_[child] = ShardData({
+                shareMicros: micros,
+                firstSibling: firstChildId,
+                numSiblings: uint64(splits.length)
+            });
         }
         if (totalShareMicros != 0) {
             revert("Shardwallet: share too small");
         }
 
-        forging_[firstChildId] = ForgingData({
-            parents: parents64,
-            childrenSharesMicros: childrenSharesMicros
-        });
         emit Reforging({
             parents: parents,
             firstChildId: firstChildId,
@@ -237,8 +243,9 @@ contract Shardwallet is ERC721 {
         for (uint256 i = 0; i < parents.length; i++) {
             // If this cast to `uint64` is lossy, then `parents[i]` can't be a
             // real token, so we'll fail anyway when `reforge` checks that
-            // `msg.sender` can operate the parent.
-            shareMicrosWord += shareMicros_[uint64(parents[i])];
+            // `msg.sender` can operate the parent (which is provided before
+            // truncation).
+            shareMicrosWord += shardData_[uint64(parents[i])].shareMicros;
         }
         shareMicros = uint24(shareMicrosWord);
         SplitRequest[] memory splits = new SplitRequest[](1);
@@ -316,40 +323,47 @@ contract Shardwallet is ERC721 {
             if (cr.isPresent()) return cr.decode();
         }
         if (shardId64 == 1) {
-            // Genesis token: no parents, so no claim to inherit. This token
-            // can't quite use the normal logic because it has no parents and
-            // no forging data, so we special-case it here, and don't bother
-            // storing the result.
+            // Genesis token: no parents, so no claim to inherit.
             return 0;
         }
-        if (shareMicros_[shardId64] == 0) {
+        ShardData memory data = shardData_[shardId64];
+        if (data.shareMicros == 0) {
             // No claim, but do not store, as this token could later be created
             // as a child of a token that *has* claimed.
             return 0;
         }
 
-        uint64 firstSibling = firstSibling_[shardId64];
-        ForgingData memory forging = forging_[firstSibling];
-        if (shardId64 < firstSibling) {
+        if (shardId64 < data.firstSibling) {
             revert("Shardwallet: child too low");
         }
-        uint256 childIndex = shardId64 - firstSibling;
-        if (childIndex >= forging.childrenSharesMicros.length) {
+        uint256 childIndex = shardId64 - data.firstSibling;
+        if (childIndex >= data.numSiblings) {
             revert("Shardwallet: child too high");
         }
 
+        uint64[] memory parents = parents_[data.firstSibling];
         uint256 parentsClaimed = 0;
-        for (uint256 i = 0; i < forging.parents.length; i++) {
-            uint64 parent = forging.parents[i];
+        for (uint256 i = 0; i < parents.length; i++) {
             // Note: potential optimization here if the parent was burned
             // before we first distributed this currency, in which case we can
             // prune the whole tree. But that requires storing more state, so
             // not obvious under which conditions it's a win.
-            parentsClaimed += computeClaimed(parent, currency);
+            parentsClaimed += computeClaimed(parents[i], currency);
+        }
+        uint24[] memory siblingSharesMicros = new uint24[](data.numSiblings);
+        for (uint256 i = 0; i < data.numSiblings; i++) {
+            uint24 shareMicros;
+            uint64 sibling = data.firstSibling + uint64(i);
+            if (sibling == shardId64) {
+                shareMicros = data.shareMicros;
+            } else {
+                shareMicros = shardData_[sibling].shareMicros;
+            }
+            siblingSharesMicros[i] = shareMicros;
         }
         uint256 claimed = splitClaim(
             parentsClaimed,
-            forging.childrenSharesMicros,
+            siblingSharesMicros,
             childIndex
         );
         claimRecord_[currency][shardId64] = OptionalUints.encode(claimed);
@@ -370,7 +384,7 @@ contract Shardwallet is ERC721 {
             // actually corresponds to an active token.
             revert();
         }
-        uint24 shareMicros = shareMicros_[tokenId];
+        uint24 shareMicros = shardData_[tokenId].shareMicros;
 
         uint256 balance;
         if (address(currency) == address(0)) {
@@ -445,7 +459,7 @@ contract Shardwallet is ERC721 {
     function getShareMicros(uint256 shardId) external view returns (uint256) {
         uint64 shardId64 = uint64(shardId);
         if (shardId64 != shardId) return 0;
-        return shareMicros_[shardId64];
+        return shardData_[shardId64].shareMicros;
     }
 
     /// Gets the parent shards of the given shard.
@@ -459,7 +473,7 @@ contract Shardwallet is ERC721 {
     {
         uint64 shardId64 = uint64(shardId);
         if (shardId64 != shardId) return new uint256[](0);
-        uint64[] memory parents = forging_[firstSibling_[shardId64]].parents;
+        uint64[] memory parents = parents_[shardData_[shardId64].firstSibling];
         uint256[] memory result = new uint256[](parents.length);
         for (uint256 i = 0; i < result.length; i++) {
             result[i] = parents[i];

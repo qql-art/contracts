@@ -19,6 +19,96 @@ TEST_CASES.push(async function* deployTicketAndTrnf(props) {
   yield ["TRNF deploy", await trnf.deployTransaction.wait()];
 });
 
+TEST_CASES.push(async function* shardwalletBasics(props) {
+  const [alice] = props.signers;
+  const sw = await props.factories.Shardwallet.deploy();
+  await sw.deployed();
+  const weth9 = await props.factories.TestERC20.deploy();
+  await weth9.deployed();
+
+  // Populate the ERC-20 balance storage slot for the claim recipient so that
+  // we don't pay that gas cost while profiling.
+  await weth9.mint(alice.address, 1);
+
+  const ETH = ethers.constants.AddressZero; // as an `IERC20`
+  const oneMillion = 1e6;
+  await alice.sendTransaction({ to: sw.address, value: oneMillion });
+  await weth9.mint(sw.address, oneMillion);
+
+  yield [
+    "Shardwallet: split with 3 children",
+    await sw
+      .split(1, [
+        { shareMicros: 500000, recipient: alice.address }, // shard 2
+        { shareMicros: 300000, recipient: alice.address }, // shard 3
+        { shareMicros: 100000, recipient: alice.address }, // shard 4
+        { shareMicros: 100000, recipient: alice.address }, // shard 5
+      ])
+      .then((tx) => tx.wait()),
+  ];
+
+  yield [
+    "Shardwallet: merge with 2 parents",
+    await sw.merge([4, 5]).then((tx) => tx.wait()), // shard 6
+  ];
+
+  yield [
+    "Shardwallet: ETH claim initializing 3 records",
+    await sw.claim(6, [ETH]).then((tx) => tx.wait()),
+  ];
+  yield [
+    "Shardwallet: ERC-20 claim initializing 3 records",
+    await sw.claim(6, [weth9.address]).then((tx) => tx.wait()),
+  ];
+
+  yield [
+    "Shardwallet: ETH claim initializing 1 record",
+    await sw.claim(2, [ETH]).then((tx) => tx.wait()),
+  ];
+  yield [
+    "Shardwallet: ERC-20 claim initializing 1 record",
+    await sw.claim(2, [weth9.address]).then((tx) => tx.wait()),
+  ];
+
+  yield [
+    "Shardwallet: no-op ETH claim",
+    await sw.claim(2, [ETH]).then((tx) => tx.wait()),
+  ];
+  yield [
+    "Shardwallet: no-op ERC-20 claim",
+    await sw.claim(2, [weth9.address]).then((tx) => tx.wait()),
+  ];
+
+  await alice.sendTransaction({ to: sw.address, value: oneMillion });
+  await weth9.mint(sw.address, oneMillion);
+
+  yield [
+    "Shardwallet: ETH claim updating 1 existing record (typical claim)",
+    await sw.claim(2, [ETH]).then((tx) => tx.wait()),
+  ];
+  yield [
+    "Shardwallet: ERC-20 claim updating 1 existing record (typical claim)",
+    await sw.claim(2, [weth9.address]).then((tx) => tx.wait()),
+  ];
+  yield [
+    "Shardwallet: combined ETH/ERC-20 claim updating 1 existing record per currency (typical claim)",
+    await sw.claim(6, [ETH, weth9.address]).then((tx) => tx.wait()),
+  ];
+
+  yield [
+    "Shardwallet: reforging 3 parents into 2 children",
+    await sw
+      .reforge(
+        [2, 3, 6],
+        [
+          { shareMicros: 800000, recipient: alice.address }, // shard 7
+          { shareMicros: 200000, recipient: alice.address }, // shard 8
+        ]
+      )
+      .then((tx) => tx.wait()),
+  ];
+});
+
 const Mode = Object.freeze({
   TEXT: "TEXT",
   JSON: "JSON",
@@ -31,7 +121,7 @@ async function main() {
     if (patterns.length === 0) return true;
     return patterns.some((p) => name.match(p));
   }
-  const contractNames = ["Shardwallet", "TRNF", "Ticket"];
+  const contractNames = ["Shardwallet", "TRNF", "TestERC20", "Ticket"];
   const factories = {};
   await Promise.all(
     contractNames.map(async (name) => {

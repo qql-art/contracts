@@ -444,7 +444,7 @@ contract Shardwallet is ERC721 {
     /// the result is `0` (which is not a valid return value for a shard that
     /// has existed, since each shard must have a positive share). This method
     /// never reverts.
-    function getShareMicros(uint256 shardId) external view returns (uint256) {
+    function getShareMicros(uint256 shardId) external view returns (uint24) {
         uint64 shardId64 = uint64(shardId);
         if (shardId64 != shardId) return 0;
         return shardData_[shardId64].shareMicros;

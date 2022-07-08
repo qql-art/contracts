@@ -1,12 +1,14 @@
 const { expect } = require("chai");
 
 describe("Shardwallet", () => {
+  let Nonpayable;
   let Shardwallet;
   let TestERC20;
 
   const ETH = ethers.constants.AddressZero;
 
   before(async () => {
+    Nonpayable = await ethers.getContractFactory("Nonpayable");
     Shardwallet = await ethers.getContractFactory("Shardwallet");
     TestERC20 = await ethers.getContractFactory("TestERC20");
   });
@@ -445,6 +447,36 @@ describe("Shardwallet", () => {
         ]);
         expect(await swStatic.getParents(largeShard)).to.deep.equal([]);
       });
+    });
+
+    it("reverts if an ERC-20 transfer silently returns `false`", async () => {
+      const sw = await Shardwallet.deploy();
+      const erc20 = await TestERC20.deploy();
+      await erc20.mint(sw.address, 1);
+      await erc20.setSilentlyFailing(true);
+      await expect(sw.claim(1, [erc20.address])).to.be.revertedWith(
+        "Shardwallet: transfer failed"
+      );
+    });
+
+    it("reverts if an ERC-20 transfer reverts", async () => {
+      const sw = await Shardwallet.deploy();
+      const erc20 = await TestERC20.deploy();
+      await erc20.mint(sw.address, 1);
+      await erc20.setReverting(true);
+      await expect(sw.claim(1, [erc20.address])).to.be.revertedWith(
+        "TestERC20: revert!"
+      );
+    });
+
+    it("reverts if an ETH transfer reverts", async () => {
+      const [alice] = await ethers.getSigners();
+      const sw = await Shardwallet.deploy();
+      const nonpayable = await Nonpayable.deploy();
+      await alice.sendTransaction({ to: sw.address, value: 1 });
+      await expect(sw.claimTo(1, [ETH], nonpayable.address)).to.be.revertedWith(
+        "Nonpayable: revert!"
+      );
     });
 
     it("distributes what it can if ERC-20 balance has been reduced", async () => {

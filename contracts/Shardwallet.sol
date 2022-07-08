@@ -165,11 +165,9 @@ contract Shardwallet is ERC721 {
             }
             _burn(parent);
             uint64 parent64 = uint64(parent);
-            if (parent64 != parent) {
-                // Should be impossible, because we only mint tokens with IDs
-                // that fit into `uint64`s, and we just burned this token.
-                revert();
-            }
+            // Truncation should be lossless, because we only mint tokens with
+            // IDs that fit into `uint64`s, and we just burned this token.
+            assert(parent64 == parent);
             parents64[i] = parent64;
             totalShareMicros += shardData_[parent64].shareMicros;
         }
@@ -252,11 +250,9 @@ contract Shardwallet is ERC721 {
         splits[0].recipient = msg.sender;
         splits[0].shareMicros = shareMicros;
         child = reforge(parents, splits);
-        if (shareMicrosWord != shareMicros) {
-            // Shouldn't be possible, since `reforge` succeeding means that
-            // there weren't any duplicates in the parents list.
-            revert();
-        }
+        // Truncation should be lossless, since `reforge` succeeding means that
+        // there weren't any duplicates in the parent list.
+        assert(shareMicrosWord == shareMicros);
         return (child, shareMicros);
     }
 
@@ -296,7 +292,7 @@ contract Shardwallet is ERC721 {
         }
 
         uint256 dust = totalLoss / totalShare; // should be exact
-        if (dust * totalShare != totalLoss) revert("Shardwallet: inexact dust");
+        assert(dust * totalShare == totalLoss);
         if (numOutranking < dust) result++;
         return result;
     }
@@ -333,13 +329,9 @@ contract Shardwallet is ERC721 {
             return 0;
         }
 
-        if (shardId64 < data.firstSibling) {
-            revert("Shardwallet: child too low");
-        }
+        assert(shardId64 >= data.firstSibling);
         uint256 childIndex = shardId64 - data.firstSibling;
-        if (childIndex >= data.numSiblings) {
-            revert("Shardwallet: child too high");
-        }
+        assert(childIndex < data.numSiblings);
 
         uint64[] memory parents = parents_[data.firstSibling];
         uint256 parentsClaimed = 0;
@@ -379,11 +371,7 @@ contract Shardwallet is ERC721 {
             revert("Shardwallet: unauthorized");
         }
         uint64 tokenId = uint64(tokenId256);
-        if (tokenId != tokenId256) {
-            // Should be impossible, because we just checked that `tokenId256`
-            // actually corresponds to an active token.
-            revert();
-        }
+        assert(tokenId == tokenId256);
         uint24 shareMicros = shardData_[tokenId].shareMicros;
 
         uint256 balance;

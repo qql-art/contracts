@@ -1,0 +1,7 @@
+package-lock.json
+
+# Hardhat files
+/cache/
+/artifacts/
+/coverage/
+/coverage.json

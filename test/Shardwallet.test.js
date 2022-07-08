@@ -198,27 +198,23 @@ describe("Shardwallet", () => {
     });
 
     it("behaves reasonably under a realistic sequence of operations", async () => {
-      const [deployer] = await ethers.getSigners();
-      const [alice, bob, camille, dolores] = Array(4)
-        .fill()
-        .map(() => ethers.Wallet.createRandom().connect(deployer.provider));
+      const [deployer, alice, bob, camille, dolores] =
+        await ethers.getSigners();
       const sw = await Shardwallet.deploy();
       const weth9 = await TestERC20.deploy();
       const dai = await TestERC20.deploy();
 
-      // Give each signer some amount of gas money, and keep track of how much
-      // gas they spend so that we can check that they've been distributed the
+      // Keep track of how much ETH each signer started with, less gas spent
+      // along the way, so that we can check that they've been distributed the
       // right amount of ETH.
-      const gasFunds = new Map();
+      const expectedSurplus = new Map();
       for (const signer of [alice, bob, camille, dolores]) {
-        const value = ethers.constants.WeiPerEther;
-        await deployer.sendTransaction({ to: signer.address, value });
-        gasFunds.set(signer.address, value);
+        expectedSurplus.set(signer.address, await signer.getBalance());
       }
       async function countGas(txOrRx) {
         const rx = txOrRx.gasUsed != null ? txOrRx : await txOrRx.wait();
         const fee = rx.gasUsed.mul(rx.effectiveGasPrice);
-        gasFunds.set(rx.from, gasFunds.get(rx.from).sub(fee));
+        expectedSurplus.set(rx.from, expectedSurplus.get(rx.from).sub(fee));
       }
 
       await sw.split(1, [
@@ -262,7 +258,7 @@ describe("Shardwallet", () => {
             expected: received.mul(percent).div(100), // rounded down
             actualEth: await bearer
               .getBalance()
-              .then((b) => b.sub(gasFunds.get(bearer.address))),
+              .then((b) => b.sub(expectedSurplus.get(bearer.address))),
             actualWeth9: await weth9.balanceOf(bearer.address),
           }))
         );

@@ -20,6 +20,9 @@ describe("Shardwallet", () => {
       const sw = await Shardwallet.deploy();
       const erc20 = await TestERC20.deploy();
 
+      expect(await sw.name()).to.equal("Shardwallet");
+      expect(await sw.symbol()).to.equal("SHARD");
+
       expect(await sw.getParents(0)).to.deep.equal([]);
       expect(await sw.getParents(1)).to.deep.equal([]);
       expect(await sw.getShareMicros(1)).to.equal(1000000);

@@ -121,12 +121,6 @@ describe("Shardwallet", () => {
       expect(await sw.getShareMicros(5)).to.equal(1000000);
     });
 
-    it("prohibits merging a shard with itself", async () => {
-      const sw = await Shardwallet.deploy();
-      // Will fail due to owner check on token #1 after it's been burned.
-      await expect(sw.merge([1, 1])).to.be.revertedWith("ERC721:");
-    });
-
     it("handles non-whole claim splits", async () => {
       const [alice] = await ethers.getSigners();
       const bob = ethers.Wallet.createRandom().connect(alice.provider);
@@ -330,6 +324,70 @@ describe("Shardwallet", () => {
           }))
         );
       }
+    });
+  });
+
+  describe("invalid operations", () => {
+    // Share chain state for these tests, since they only make static calls.
+    let alice, bob, sw;
+    before(async () => {
+      [alice, bob] = await ethers.getSigners();
+      sw = await Shardwallet.deploy();
+    });
+
+    it("reverts when merging a shard with itself", async () => {
+      // Will fail due to owner check on token #1 after it's been burned.
+      await expect(sw.callStatic.merge([1, 1])).to.be.revertedWith("ERC721:");
+    });
+
+    it("reverts when attempting a merge of no shards", async () => {
+      await expect(sw.callStatic.merge([])).to.be.revertedWith(
+        "Shardwallet: no parents"
+      );
+      await expect(sw.callStatic.reforge([], [])).to.be.revertedWith(
+        "Shardwallet: no parents"
+      );
+    });
+
+    it("reverts if reforging would increase share", async () => {
+      await expect(
+        sw.callStatic.split(1, [
+          { shareMicros: 500000, recipient: alice.address },
+          { shareMicros: 500001, recipient: alice.address },
+        ])
+      ).to.be.revertedWith("Shardwallet: share too large");
+    });
+
+    it("reverts if reforging would decrease share", async () => {
+      await expect(
+        sw.callStatic.split(1, [
+          { shareMicros: 500000, recipient: alice.address },
+          { shareMicros: 499999, recipient: alice.address },
+        ])
+      ).to.be.revertedWith("Shardwallet: share too small");
+    });
+
+    it("reverts if attempting to create a zero-share shard", async () => {
+      await expect(
+        sw.callStatic.split(1, [
+          { shareMicros: 500000, recipient: alice.address },
+          { shareMicros: 500000, recipient: alice.address },
+          { shareMicros: 0, recipient: alice.address },
+        ])
+      ).to.be.revertedWith("Shardwallet: null share");
+    });
+
+    it("reverts if attempting to reforge a shard owned by someone else", async () => {
+      await expect(sw.connect(bob).callStatic.merge([1])).to.be.revertedWith(
+        "Shardwallet: unauthorized"
+      );
+    });
+
+    it("reverts if attempting to claim for a shard owned by someone else", async () => {
+      // (This is prohibited even though there's no ETH to claim right now.)
+      await expect(
+        sw.connect(bob).callStatic.claim(1, [ETH])
+      ).to.be.revertedWith("Shardwallet: unauthorized");
     });
   });
 

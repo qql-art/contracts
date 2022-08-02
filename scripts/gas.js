@@ -109,6 +109,46 @@ TEST_CASES.push(async function* shardwalletBasics(props) {
   ];
 });
 
+TEST_CASES.push(async function* shardwalletLongChains(props) {
+  const [alice] = props.signers;
+  const sw = await props.factories.Shardwallet.deploy();
+  await sw.deployed();
+  const weth9 = await props.factories.TestERC20.deploy();
+  await weth9.deployed();
+
+  // Populate the ERC-20 balance storage slot for the claim recipient so that
+  // we don't pay that gas cost while profiling.
+  await weth9.mint(alice.address, 1);
+
+  const oneMillion = 1e6;
+  await alice.sendTransaction({ to: sw.address, value: oneMillion });
+  await weth9.mint(sw.address, oneMillion);
+
+  const fanOut = 10;
+  const childShare = oneMillion / fanOut;
+  if (!Number.isInteger(childShare))
+    throw new Error("fix test constants: " + childShare);
+  const generations = 8;
+  let shard = 1;
+  for (let i = 0; i < generations; i++) {
+    await sw.split(
+      shard,
+      Array(fanOut).fill({ shareMicros: childShare, recipient: alice.address })
+    );
+    await sw.merge(
+      Array(fanOut)
+        .fill()
+        .map((_, i) => shard + i + 1)
+    );
+    shard += fanOut + 1;
+  }
+
+  yield [
+    "Shardwallet: first claim over long chain",
+    await sw.claim(shard, [weth9.address]).then((tx) => tx.wait()),
+  ];
+});
+
 const Mode = Object.freeze({
   TEXT: "TEXT",
   JSON: "JSON",

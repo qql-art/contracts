@@ -1,0 +1,72 @@
+#!/bin/sh
+set -eu
+
+usage() {
+    cat <<'EOF'
+usage: diff-gas [-j] <before-file> <output-file>
+    where each <file> is the output of `node scripts/gas.js -j`
+
+FLAGS
+    -j  emit structured JSON instead of human-readable output
+EOF
+}
+
+main() {
+    json=
+    if [ "${1-}" = -j ]; then
+        json=1
+        shift
+    fi
+    if [ $# -ne 2 ]; then
+        usage >&2
+        return 1
+    fi
+    if ! command -v jq >/dev/null 2>/dev/null; then
+        printf >&2 '%s\n' 'fatal: missing `jq`; please install it'
+        return 1
+    fi
+    bold=
+    sgr0=
+    if [ -t 1 ]; then
+        if command -v tput >/dev/null 2>/dev/null; then
+            bold="$(tput bold)"
+            sgr0="$(tput sgr0)"
+        else
+            bold="$(printf '\e[1m')"
+            sgr0="$(printf '\e[0m')"
+        fi
+    fi
+    script='
+        def build_index($k):
+            map({(.label): {label: .label, ($k): .gas | tonumber}}) | add;
+        ($before | build_index("before")) * ($after | build_index("after"))
+        | map(.
+            | select(.before and .after)  # drop entries in only one file
+            | .delta = .after - .before
+            | select(.delta != 0)
+        )
+    '
+    pretty='
+        .
+        | sort_by(-.delta)
+        | map([
+            .label,
+            "\n\t",
+            "\($bold)\(if .delta > 0 then "+" else "" end)\(.delta)\($sgr0)",
+            " (",
+            if .after < .before then "/" else "\u00d7" end,
+            "\(.after / .before | if . < 1 then 1/. else . end | .*100 | round | ./100)",
+            ")",
+            " (\(.before) -> \(.after))"
+        ])
+        | map(add)
+    '
+    if [ "${json}" = 1 ]; then
+        pretty=.
+    fi
+    jq -crn --slurpfile before "$1" --slurpfile after "$2" \
+        --arg bold "${bold}" --arg sgr0 "${sgr0}" \
+        "(${script}) | (${pretty}) | .[]"
+}
+
+main "$@"

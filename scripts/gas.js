@@ -109,6 +109,52 @@ TEST_CASES.push(async function* shardwalletBasics(props) {
   ];
 });
 
+TEST_CASES.push(async function* shardwalletManyChildren(props) {
+  const [alice] = props.signers;
+  const sw = await props.factories.Shardwallet.deploy();
+  await sw.deployed();
+
+  const oneMillion = 1e6;
+  const ETH = ethers.constants.AddressZero; // as an `IERC20`
+
+  let shard = 1;
+  await alice.sendTransaction({ to: sw.address, value: oneMillion + 1 });
+  await sw.claim(shard, [ETH]);
+
+  const siblingCounts = [4, 20, 100];
+  for (let i = 0; i < siblingCounts.length; i++) {
+    const siblings = siblingCounts[i];
+    const lastSiblings = siblingCounts[i - 1] ?? 1;
+    const childShare = oneMillion / siblings;
+    if (!Number.isInteger(childShare))
+      throw new Error(`fix test constants (${siblings}): ${childShare}`);
+    await alice.sendTransaction({ to: sw.address, value: oneMillion + 1 });
+    yield [
+      `Shardwallet: initial claim with ${lastSiblings} parents`,
+      await sw.claim(shard, [ETH]).then((tx) => tx.wait()),
+    ];
+
+    await sw.split(
+      shard,
+      Array(siblings).fill({
+        shareMicros: childShare,
+        recipient: alice.address,
+      })
+    );
+    yield [
+      `Shardwallet: initial claim with ${siblings} siblings`,
+      await sw.claim(shard + 1, [ETH]).then((tx) => tx.wait()),
+    ];
+
+    await sw.merge(
+      Array(siblings)
+        .fill()
+        .map((_, i) => shard + 1 + i)
+    );
+    shard += 1 + siblings;
+  }
+});
+
 TEST_CASES.push(async function* shardwalletLongChains(props) {
   const [alice] = props.signers;
   const sw = await props.factories.Shardwallet.deploy();

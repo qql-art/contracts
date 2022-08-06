@@ -1,5 +1,6 @@
 require("dotenv").config();
 
+require("@nomiclabs/hardhat-etherscan");
 require("@nomiclabs/hardhat-waffle");
 require("solidity-coverage");
 
@@ -42,5 +43,11 @@ if (process.env.MAINNET_PRIVATE_KEY) {
       url: `https://eth-mainnet.alchemyapi.io/v2/${process.env.ALCHEMY_API_KEY}`,
       accounts: [`${process.env.MAINNET_PRIVATE_KEY}`],
     },
+  };
+}
+
+if (process.env.ETHERSCAN_API_KEY) {
+  module.exports.etherscan = {
+    apiKey: process.env.ETHERSCAN_API_KEY,
   };
 }

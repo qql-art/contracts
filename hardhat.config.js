@@ -35,3 +35,12 @@ module.exports = {
     },
   },
 };
+
+if (process.env.MAINNET_PRIVATE_KEY) {
+  module.exports.networks = {
+    mainnet: {
+      url: `https://eth-mainnet.alchemyapi.io/v2/${process.env.ALCHEMY_API_KEY}`,
+      accounts: [`${process.env.MAINNET_PRIVATE_KEY}`],
+    },
+  };
+}

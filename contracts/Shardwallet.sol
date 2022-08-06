@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.8;
 
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+
+import "./ITokenUriDelegate.sol";
 
 /// @dev
 /// An `OptionalUint` is either absent (the default, uninitialized value) or a
@@ -80,7 +83,7 @@ struct SplitRequest {
 /// Most of the time, this shouldn't be a problem; just be careful not to
 /// accidentally truncate a `uint256` to a `uint64` without first checking
 /// whether the shard exists or similar.
-contract Shardwallet is ERC721 {
+contract Shardwallet is ERC721, Ownable {
     using OptionalUints for OptionalUint;
 
     uint24 internal constant ONE_MILLION = 1000000;
@@ -91,6 +94,8 @@ contract Shardwallet is ERC721 {
     mapping(IERC20 => mapping(uint64 => OptionalUint)) claimRecord_;
 
     mapping(IERC20 => uint256) distributed_;
+
+    ITokenUriDelegate tokenUriDelegate_;
 
     /// Emitted when the given parent shards are reforged into one or more
     /// children with a new distribution of shares.
@@ -473,5 +478,28 @@ contract Shardwallet is ERC721 {
     /// distributed to shards.
     function getDistributed(IERC20 currency) external view returns (uint256) {
         return distributed_[currency];
+    }
+
+    function setTokenUriDelegate(ITokenUriDelegate tokenUriDelegate)
+        external
+        onlyOwner
+    {
+        tokenUriDelegate_ = tokenUriDelegate;
+    }
+
+    function tokenUriDelegate() external view returns (ITokenUriDelegate) {
+        return tokenUriDelegate_;
+    }
+
+    function tokenURI(uint256 tokenId)
+        public
+        view
+        override
+        returns (string memory)
+    {
+        if (!_exists(tokenId)) revert("ERC721: invalid token ID");
+        ITokenUriDelegate tokenUriDelegate = tokenUriDelegate_;
+        if (address(tokenUriDelegate) == address(0)) return "";
+        return tokenUriDelegate.tokenURI(tokenId);
     }
 }

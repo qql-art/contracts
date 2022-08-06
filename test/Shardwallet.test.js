@@ -4,6 +4,7 @@ describe("Shardwallet", () => {
   let Nonpayable;
   let Shardwallet;
   let TestERC20;
+  let TestTokenUriDelegate;
 
   const ETH = ethers.constants.AddressZero;
 
@@ -11,6 +12,9 @@ describe("Shardwallet", () => {
     Nonpayable = await ethers.getContractFactory("Nonpayable");
     Shardwallet = await ethers.getContractFactory("Shardwallet");
     TestERC20 = await ethers.getContractFactory("TestERC20");
+    TestTokenUriDelegate = await ethers.getContractFactory(
+      "TestTokenUriDelegate"
+    );
   });
 
   describe("basic operations", () => {
@@ -551,6 +555,33 @@ describe("Shardwallet", () => {
       }
       // ...then we can eventually get the right answer.
       expect(await sw.callStatic.computeClaimed(shard, ETH)).to.equal(0);
+    });
+  });
+
+  describe("token URI delegate", () => {
+    it("works when set or unset, with active and inactive shards", async () => {
+      const [alice] = await ethers.getSigners();
+      const sw = await Shardwallet.deploy();
+      await sw.split(1, [
+        { shareMicros: 100000, recipient: alice.address },
+        { shareMicros: 900000, recipient: alice.address },
+      ]);
+
+      await expect(sw.tokenURI(1)).to.be.revertedWith(
+        "ERC721: invalid token ID"
+      );
+      expect(await sw.tokenURI(2)).to.equal("");
+
+      const uriDelegate = await TestTokenUriDelegate.deploy();
+      await sw.setTokenUriDelegate(uriDelegate.address);
+      expect(await sw.tokenUriDelegate()).to.equal(uriDelegate.address);
+
+      await expect(sw.tokenURI(1)).to.be.revertedWith(
+        "ERC721: invalid token ID"
+      );
+      expect(await sw.tokenURI(2)).to.equal(
+        "data:application/json,%7b%22description%22%3a%22Shard%20%232%2c%20share%20100000%20micros%22%7d"
+      );
     });
   });
 });

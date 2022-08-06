@@ -480,11 +480,11 @@ contract Shardwallet is ERC721, Ownable {
         return distributed_[currency];
     }
 
-    function setTokenUriDelegate(ITokenUriDelegate tokenUriDelegate)
+    function setTokenUriDelegate(ITokenUriDelegate delegate)
         external
         onlyOwner
     {
-        tokenUriDelegate_ = tokenUriDelegate;
+        tokenUriDelegate_ = delegate;
     }
 
     function tokenUriDelegate() external view returns (ITokenUriDelegate) {
@@ -498,8 +498,8 @@ contract Shardwallet is ERC721, Ownable {
         returns (string memory)
     {
         if (!_exists(tokenId)) revert("ERC721: invalid token ID");
-        ITokenUriDelegate tokenUriDelegate = tokenUriDelegate_;
-        if (address(tokenUriDelegate) == address(0)) return "";
-        return tokenUriDelegate.tokenURI(tokenId);
+        ITokenUriDelegate delegate = tokenUriDelegate_;
+        if (address(delegate) == address(0)) return "";
+        return delegate.tokenURI(tokenId);
     }
 }

@@ -3,10 +3,31 @@ const { ethers } = hre;
 
 const TEST_CASES = [];
 
+async function summon(props, signer) {
+  const swf = await props.factories.ShardwalletFactory.connect(signer).deploy();
+  const tx = await swf.connect(signer).summon();
+  const rx = await tx.wait();
+  const events = rx.events.filter((e) => e.event === "ShardwalletCreation");
+  if (events.length !== 1) {
+    throw new Error(
+      "expected exactly one ShardwalletCreation, got " + events.length
+    );
+  }
+  const [event] = events;
+  const sw = props.factories.Shardwallet.attach(event.args.shardwallet);
+  return { sw, deployTransaction: tx };
+}
+
+TEST_CASES.push(async function* deployShardwalletFactory(props) {
+  const swf = await props.factories.ShardwalletFactory.deploy();
+  await swf.deployed();
+  yield ["ShardwalletFactory deploy", await swf.deployTransaction.wait()];
+});
+
 TEST_CASES.push(async function* deployShardwallet(props) {
-  const sw = await props.factories.Shardwallet.deploy();
-  await sw.deployed();
-  yield ["Shardwallet deploy", await sw.deployTransaction.wait()];
+  const [alice] = props.signers;
+  const { sw, deployTransaction } = await summon(props, alice);
+  yield ["Shardwallet deploy", await deployTransaction.wait()];
 });
 
 TEST_CASES.push(async function* deployTicketAndTrnf(props) {
@@ -21,7 +42,7 @@ TEST_CASES.push(async function* deployTicketAndTrnf(props) {
 
 TEST_CASES.push(async function* shardwalletBasics(props) {
   const [alice] = props.signers;
-  const sw = await props.factories.Shardwallet.deploy();
+  const { sw } = await summon(props, alice);
   await sw.deployed();
   const weth9 = await props.factories.TestERC20.deploy();
   await weth9.deployed();
@@ -111,7 +132,7 @@ TEST_CASES.push(async function* shardwalletBasics(props) {
 
 TEST_CASES.push(async function* shardwalletManyChildren(props) {
   const [alice] = props.signers;
-  const sw = await props.factories.Shardwallet.deploy();
+  const { sw } = await summon(props, alice);
   await sw.deployed();
 
   const oneMillion = 1e6;
@@ -157,7 +178,7 @@ TEST_CASES.push(async function* shardwalletManyChildren(props) {
 
 TEST_CASES.push(async function* shardwalletLongChains(props) {
   const [alice] = props.signers;
-  const sw = await props.factories.Shardwallet.deploy();
+  const { sw } = await summon(props, alice);
   await sw.deployed();
   const weth9 = await props.factories.TestERC20.deploy();
   await weth9.deployed();
@@ -207,7 +228,13 @@ async function main() {
     if (patterns.length === 0) return true;
     return patterns.some((p) => name.match(p));
   }
-  const contractNames = ["Shardwallet", "TRNF", "TestERC20", "Ticket"];
+  const contractNames = [
+    "Shardwallet",
+    "ShardwalletFactory",
+    "TRNF",
+    "TestERC20",
+    "Ticket",
+  ];
   const factories = {};
   await Promise.all(
     contractNames.map(async (name) => {

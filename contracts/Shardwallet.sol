@@ -122,7 +122,7 @@ contract Shardwallet is ERC721, Ownable {
             numSiblings: 1
         });
         // (`parents_[1]` is empty by default, which is correct.)
-        _safeMint(msg.sender, 1);
+        _mint(msg.sender, 1);
     }
 
     receive() external payable {}

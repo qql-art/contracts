@@ -3,25 +3,45 @@ const { expect } = require("chai");
 describe("Shardwallet", () => {
   let Nonpayable;
   let Shardwallet;
+  let ShardwalletFactory;
   let TestERC20;
   let TestTokenUriDelegate;
+
+  let swf;
 
   const ETH = ethers.constants.AddressZero;
 
   before(async () => {
     Nonpayable = await ethers.getContractFactory("Nonpayable");
     Shardwallet = await ethers.getContractFactory("Shardwallet");
+    ShardwalletFactory = await ethers.getContractFactory("ShardwalletFactory");
     TestERC20 = await ethers.getContractFactory("TestERC20");
     TestTokenUriDelegate = await ethers.getContractFactory(
       "TestTokenUriDelegate"
     );
+
+    swf = await ShardwalletFactory.deploy();
   });
+
+  async function summon() {
+    const tx = await swf.summon();
+    const rx = await tx.wait();
+    const events = rx.events.filter((e) => e.event === "ShardwalletCreation");
+    if (events.length !== 1) {
+      throw new Error(
+        "expected exactly one ShardwalletCreation, got " + events.length
+      );
+    }
+    const [event] = events;
+    const sw = Shardwallet.attach(event.args.shardwallet);
+    return { sw, deployTransaction: tx };
+  }
 
   describe("basic operations", () => {
     it("permits claiming ETH and ERC-20s with a single shard", async () => {
       const [alice] = await ethers.getSigners();
       const bob = ethers.Wallet.createRandom().connect(alice.provider);
-      const sw = await Shardwallet.deploy();
+      const { sw, deployTransaction } = await summon();
       const erc20 = await TestERC20.deploy();
 
       expect(await sw.name()).to.equal("Shardwallet");
@@ -31,9 +51,9 @@ describe("Shardwallet", () => {
       expect(await sw.getParents(1)).to.deep.equal([]);
       expect(await sw.getShareMicros(1)).to.equal(1000000);
 
-      await expect(sw.deployTransaction)
+      await expect(deployTransaction)
         .to.emit(sw, "Transfer")
-        .withArgs(ethers.constants.AddressZero, alice.address, 1);
+        .withArgs(swf.address, alice.address, 1);
 
       await alice.sendTransaction({ to: sw.address, value: 100 });
       await erc20.mint(sw.address, 500);
@@ -71,7 +91,7 @@ describe("Shardwallet", () => {
     it("permits splitting and claiming from child shards", async () => {
       const [alice] = await ethers.getSigners();
       const bob = ethers.Wallet.createRandom().connect(alice.provider);
-      const sw = await Shardwallet.deploy();
+      const { sw } = await summon();
 
       await alice.sendTransaction({ to: sw.address, value: 1000 });
       await sw.claimTo(1, [ETH], bob.address);
@@ -133,7 +153,7 @@ describe("Shardwallet", () => {
     it("handles non-whole claim splits", async () => {
       const [alice] = await ethers.getSigners();
       const bob = ethers.Wallet.createRandom().connect(alice.provider);
-      const sw = await Shardwallet.deploy();
+      const { sw } = await summon();
 
       // Split the root shard into two, then split the first child again, so
       // that there are children whose siblings' shares add to less than unity.
@@ -170,7 +190,7 @@ describe("Shardwallet", () => {
     it("properly distributes claims with multiple parents and children", async () => {
       const [alice] = await ethers.getSigners();
       const bob = ethers.Wallet.createRandom().connect(alice.provider);
-      const sw = await Shardwallet.deploy();
+      const { sw } = await summon();
 
       await alice.sendTransaction({ to: sw.address, value: 2 });
 
@@ -203,7 +223,7 @@ describe("Shardwallet", () => {
     it("behaves reasonably under a realistic sequence of operations", async () => {
       const [deployer, alice, bob, camille, dolores] =
         await ethers.getSigners();
-      const sw = await Shardwallet.deploy();
+      const { sw } = await summon();
       const weth9 = await TestERC20.deploy();
       const dai = await TestERC20.deploy();
 
@@ -341,7 +361,7 @@ describe("Shardwallet", () => {
     let alice, bob, sw;
     before(async () => {
       [alice, bob] = await ethers.getSigners();
-      sw = await Shardwallet.deploy();
+      ({ sw } = await summon());
     });
 
     it("reverts when merging a shard with itself", async () => {
@@ -407,7 +427,7 @@ describe("Shardwallet", () => {
       let smallShard, largeShard;
       before(async () => {
         [alice] = await ethers.getSigners();
-        const sw = await Shardwallet.deploy();
+        const { sw } = await summon();
         await sw.merge([1]);
         smallShard = ethers.BigNumber.from(2);
         largeShard = smallShard.add(ethers.BigNumber.from(2).pow(64));
@@ -457,7 +477,7 @@ describe("Shardwallet", () => {
     });
 
     it("reverts if an ERC-20 transfer silently returns `false`", async () => {
-      const sw = await Shardwallet.deploy();
+      const { sw } = await summon();
       const erc20 = await TestERC20.deploy();
       await erc20.mint(sw.address, 1);
       await erc20.setSilentlyFailing(true);
@@ -467,7 +487,7 @@ describe("Shardwallet", () => {
     });
 
     it("reverts if an ERC-20 transfer reverts", async () => {
-      const sw = await Shardwallet.deploy();
+      const { sw } = await summon();
       const erc20 = await TestERC20.deploy();
       await erc20.mint(sw.address, 1);
       await erc20.setReverting(true);
@@ -478,7 +498,7 @@ describe("Shardwallet", () => {
 
     it("reverts if an ETH transfer reverts", async () => {
       const [alice] = await ethers.getSigners();
-      const sw = await Shardwallet.deploy();
+      const { sw } = await summon();
       const nonpayable = await Nonpayable.deploy();
       await alice.sendTransaction({ to: sw.address, value: 1 });
       await expect(sw.claimTo(1, [ETH], nonpayable.address)).to.be.revertedWith(
@@ -488,7 +508,7 @@ describe("Shardwallet", () => {
 
     it("distributes what it can if ERC-20 balance has been reduced", async () => {
       const [alice] = await ethers.getSigners();
-      const sw = await Shardwallet.deploy();
+      const { sw } = await summon();
       const erc20 = await TestERC20.deploy();
 
       await sw.split(1, [
@@ -525,7 +545,7 @@ describe("Shardwallet", () => {
 
     it("overflows the stack when computing a deep enough claim, recoverably", async () => {
       const [alice] = await ethers.getSigners();
-      const sw = await Shardwallet.deploy();
+      const { sw } = await summon();
       let shard = 1;
       while (true) {
         const reverts = await sw.callStatic
@@ -561,7 +581,7 @@ describe("Shardwallet", () => {
   describe("token URI delegate", () => {
     it("works when set or unset, with active and inactive shards", async () => {
       const [alice] = await ethers.getSigners();
-      const sw = await Shardwallet.deploy();
+      const { sw } = await summon();
       await sw.split(1, [
         { shareMicros: 100000, recipient: alice.address },
         { shareMicros: 900000, recipient: alice.address },

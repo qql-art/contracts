@@ -53,7 +53,7 @@ describe("Shardwallet", () => {
 
       await expect(deployTransaction)
         .to.emit(sw, "Transfer")
-        .withArgs(swf.address, alice.address, 1);
+        .withArgs(ethers.constants.AddressZero, alice.address, 1);
 
       await alice.sendTransaction({ to: sw.address, value: 100 });
       await erc20.mint(sw.address, 500);
@@ -575,6 +575,14 @@ describe("Shardwallet", () => {
       }
       // ...then we can eventually get the right answer.
       expect(await sw.callStatic.computeClaimed(shard, ETH)).to.equal(0);
+    });
+
+    it("can only be initialized once", async () => {
+      const [alice] = await ethers.getSigners();
+      const { sw } = await summon();
+      await expect(sw.initialize(alice.address)).to.be.revertedWith(
+        "Initializable:"
+      );
     });
   });
 

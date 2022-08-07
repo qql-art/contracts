@@ -2,6 +2,7 @@
 pragma solidity ^0.8.8;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
@@ -83,7 +84,7 @@ struct ChildSpec {
 /// Most of the time, this shouldn't be a problem; just be careful not to
 /// accidentally truncate a `uint256` to a `uint64` without first checking
 /// whether the shard exists or similar.
-contract Shardwallet is ERC721, Ownable {
+contract Shardwallet is ERC721, Initializable, Ownable {
     using OptionalUints for OptionalUint;
 
     uint24 internal constant ONE_MILLION = 1000000;
@@ -114,7 +115,10 @@ contract Shardwallet is ERC721, Ownable {
         uint256 amount
     );
 
-    constructor() ERC721("", "") {
+    constructor() ERC721("", "") {}
+
+    function initialize(address owner) external initializer {
+        _transferOwnership(owner);
         nextTokenId_ = 2;
         shardData_[1] = ShardData({
             shareMicros: ONE_MILLION,
@@ -122,7 +126,7 @@ contract Shardwallet is ERC721, Ownable {
             numSiblings: 1
         });
         // (`parents_[1]` is empty by default, which is correct.)
-        _mint(msg.sender, 1);
+        _safeMint(owner, 1);
     }
 
     receive() external payable {}

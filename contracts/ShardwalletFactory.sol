@@ -8,8 +8,7 @@ contract ShardwalletFactory {
 
     function summon() external returns (Shardwallet) {
         Shardwallet sw = new Shardwallet();
-        sw.transferOwnership(msg.sender);
-        sw.safeTransferFrom(address(this), msg.sender, 1);
+        sw.initialize(msg.sender);
         emit ShardwalletCreation(sw, msg.sender);
         return sw;
     }

@@ -48,7 +48,7 @@ struct ShardData {
     uint64 numSiblings; // including self
 }
 
-struct SplitRequest {
+struct ChildSpec {
     uint24 shareMicros;
     address recipient;
 }
@@ -142,7 +142,7 @@ contract Shardwallet is ERC721, Ownable {
     ///
     /// The children are assigned consecutive IDs, with the same order as given
     /// by `splits`. The return value is the ID of the first child shard.
-    function reforge(uint256[] memory parents, SplitRequest[] memory splits)
+    function reforge(uint256[] memory parents, ChildSpec[] memory splits)
         public
         returns (uint256)
     {
@@ -223,7 +223,7 @@ contract Shardwallet is ERC721, Ownable {
     ///
     /// The children are assigned consecutive IDs, with the same order as given
     /// by `splits`. The return value is the ID of the first child shard.
-    function split(uint256 tokenId, SplitRequest[] memory splits)
+    function split(uint256 tokenId, ChildSpec[] memory splits)
         external
         returns (uint256 firstChildId)
     {
@@ -251,7 +251,7 @@ contract Shardwallet is ERC721, Ownable {
             shareMicrosWord += shardData_[uint64(parents[i])].shareMicros;
         }
         shareMicros = uint24(shareMicrosWord);
-        SplitRequest[] memory splits = new SplitRequest[](1);
+        ChildSpec[] memory splits = new ChildSpec[](1);
         splits[0].recipient = msg.sender;
         splits[0].shareMicros = shareMicros;
         child = reforge(parents, splits);

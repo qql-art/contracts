@@ -97,6 +97,8 @@ contract Shardwallet is ERC721, Initializable, Ownable {
     mapping(IERC20 => uint256) distributed_;
 
     ITokenUriDelegate tokenUriDelegate_;
+    string name_;
+    string symbol_;
 
     /// Emitted when the given parent shards are reforged into one or more
     /// children with a new distribution of shares.
@@ -117,8 +119,15 @@ contract Shardwallet is ERC721, Initializable, Ownable {
 
     constructor() ERC721("", "") {}
 
-    function initialize(address owner) external initializer {
+    function initialize(
+        address owner,
+        string calldata _name,
+        string calldata _symbol
+    ) external initializer {
         _transferOwnership(owner);
+        name_ = _name;
+        symbol_ = _symbol;
+
         nextTokenId_ = 2;
         shardData_[1] = ShardData({
             shareMicros: ONE_MILLION,
@@ -131,12 +140,12 @@ contract Shardwallet is ERC721, Initializable, Ownable {
 
     receive() external payable {}
 
-    function name() public pure override returns (string memory) {
-        return "Shardwallet";
+    function name() public view override returns (string memory) {
+        return name_;
     }
 
-    function symbol() public pure override returns (string memory) {
-        return "SHARD";
+    function symbol() public view override returns (string memory) {
+        return symbol_;
     }
 
     /// Combines one or more shards and redistributes their share to one or

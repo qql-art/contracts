@@ -33,7 +33,7 @@ describe("ShardwalletFactory", () => {
     const swf = await ShardwalletFactory.deploy();
     const implementation = Shardwallet.attach(await swf.implementation());
     await expect(
-      implementation.initialize(deployer.address)
+      implementation.initialize(deployer.address, "", "")
     ).to.be.revertedWith("Initializable:");
     expect(await implementation.owner()).to.equal(swf.address);
   });
@@ -45,7 +45,7 @@ describe("ShardwalletFactory", () => {
     const salt = makeSalt(deployer.address, 0);
     const sw = Shardwallet.attach(await swf.predictAddress(salt));
 
-    const summonTx = await swf.summon(salt);
+    const summonTx = await swf.summon(salt, "Shardwallet", "SHARD");
     await expect(summonTx)
       .to.emit(swf, "ShardwalletCreation")
       .withArgs(sw.address, deployer.address);
@@ -61,8 +61,8 @@ describe("ShardwalletFactory", () => {
     const [deployer] = await ethers.getSigners();
     const swf = await ShardwalletFactory.deploy();
     const salt = makeSalt(deployer.address, 0);
-    await swf.summon(salt);
-    await expect(swf.summon(salt)).to.be.revertedWith(
+    await swf.summon(salt, "Shardwallet", "SHARD");
+    await expect(swf.summon(salt, "Shardwallet", "SHARD")).to.be.revertedWith(
       "ERC1167: create2 failed"
     );
   });
@@ -71,7 +71,7 @@ describe("ShardwalletFactory", () => {
     const [, notDeployer] = await ethers.getSigners();
     const swf = await ShardwalletFactory.deploy();
     const salt = makeSalt(notDeployer.address, 0);
-    await expect(swf.summon(salt)).to.be.revertedWith(
+    await expect(swf.summon(salt, "Shardwallet", "SHARD")).to.be.revertedWith(
       "ShardwalletFactory: unauthorized"
     );
   });

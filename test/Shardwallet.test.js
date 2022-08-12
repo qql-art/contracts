@@ -28,7 +28,7 @@ describe("Shardwallet", () => {
     const address = await signer.getAddress();
     const nonce = await swf.provider.getTransactionCount(address);
     const salt = address + nonce.toString(16).padStart(24, "0");
-    const tx = await swf.summon(salt);
+    const tx = await swf.summon(salt, "Shardwallet", "SHARD");
     const rx = await tx.wait();
     const events = rx.events.filter((e) => e.event === "ShardwalletCreation");
     if (events.length !== 1) {
@@ -584,7 +584,7 @@ describe("Shardwallet", () => {
     it("can only be initialized once", async () => {
       const [alice] = await ethers.getSigners();
       const { sw } = await summon();
-      await expect(sw.initialize(alice.address)).to.be.revertedWith(
+      await expect(sw.initialize(alice.address, "", "")).to.be.revertedWith(
         "Initializable:"
       );
     });

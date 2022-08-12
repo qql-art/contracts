@@ -14,10 +14,14 @@ contract ShardwalletFactory {
         implementation_ = new Shardwallet();
         // Lock the master copy just to prevent shenanigans. (Doesn't actually
         // affect the integrity of clones.)
-        implementation_.initialize(address(this));
+        implementation_.initialize(address(this), "", "");
     }
 
-    function summon(bytes32 salt) external returns (Shardwallet) {
+    function summon(
+        bytes32 salt,
+        string calldata name,
+        string calldata symbol
+    ) external returns (Shardwallet) {
         if (bytes20(salt) != bytes20(msg.sender)) {
             // Prevent mempool salt sniping.
             revert("ShardwalletFactory: unauthorized");
@@ -27,7 +31,7 @@ contract ShardwalletFactory {
             salt
         );
         Shardwallet sw = Shardwallet(payable(clone));
-        sw.initialize(msg.sender);
+        sw.initialize(msg.sender, name, symbol);
         emit ShardwalletCreation(sw, msg.sender);
         return sw;
     }

@@ -8,7 +8,7 @@ async function summon(props, signer) {
   const address = await signer.getAddress();
   const nonce = await swf.provider.getTransactionCount(address);
   const salt = address + nonce.toString(16).padStart(24, "0");
-  const tx = await swf.summon(salt);
+  const tx = await swf.summon(salt, "Shardwallet", "SHARD");
   const rx = await tx.wait();
   const events = rx.events.filter((e) => e.event === "ShardwalletCreation");
   if (events.length !== 1) {

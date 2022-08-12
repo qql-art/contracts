@@ -1,7 +1,7 @@
 const deploy = require("./deploy");
 
 async function main() {
-  deploy("Shardwallet");
+  deploy("ShardwalletFactory");
 }
 
 main().catch((e) => {

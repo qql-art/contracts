@@ -117,7 +117,9 @@ contract Shardwallet is ERC721, Initializable, Ownable {
         uint256 amount
     );
 
-    constructor() ERC721("", "") {}
+    constructor() ERC721("", "") {
+        _disableInitializers();
+    }
 
     function initialize(
         address owner,

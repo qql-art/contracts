@@ -12,9 +12,6 @@ contract ShardwalletFactory {
 
     constructor() {
         implementation_ = new Shardwallet();
-        // Lock the master copy just to prevent shenanigans. (Doesn't actually
-        // affect the integrity of clones.)
-        implementation_.initialize(address(this), "", "");
     }
 
     function summon(

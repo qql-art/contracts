@@ -30,7 +30,7 @@ module.exports = {
       },
       outputSelection: {
         "*": {
-          "*": ["devdoc", "userdoc"],
+          "*": ["devdoc", "userdoc", "storageLayout"],
         },
       },
     },

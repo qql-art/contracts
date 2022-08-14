@@ -612,7 +612,7 @@ describe("Shardwallet", () => {
         "ERC721: invalid token ID"
       );
       expect(await sw.tokenURI(2)).to.equal(
-        "data:application/json,%7b%22description%22%3a%22Shard%20%232%2c%20share%20100000%20micros%22%7d"
+        `data:text/plain,${sw.address.toLowerCase()}%20%232`
       );
     });
   });

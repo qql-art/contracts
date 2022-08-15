@@ -292,7 +292,7 @@ describe("MintPass", () => {
     });
 
     it("fails cleanly if a collector tries to buy more than 2^256 wei worth of passes", async () => {
-      const mp = await MintPass.deploy(ethers.constants.MaxUint256.div(2));
+      const mp = await MintPass.deploy(1);
       const startTimestamp = +(await clock.timestamp()) + 10;
       await setNextTimestamp(startTimestamp);
       await mp.updateAuctionSchedule(basicSchedule(startTimestamp, 100));

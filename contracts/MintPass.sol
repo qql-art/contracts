@@ -111,23 +111,29 @@ struct Receipt {
     uint64 purchaseCount;
 }
 
-contract MintPass is ERC721, Ownable {
-    using ScheduleMath for AuctionSchedule;
-
+/// @dev These fields are grouped because they change at the same time and can
+/// be written atomically to save on storage I/O.
+struct SupplyStats {
     /// The total number of mint passes that have ever been created. This
     /// counts passes created by both `purchase` and `reserve`, and does not
     /// decrease when passes are burned.
-    uint256 created_;
-    /// The maximum number of mint passes that may ever be created.
-    uint256 immutable maxCreated_;
-    /// The current number of mint passes.
-    uint256 supply_;
-
-    mapping(address => Receipt) receipts_;
+    uint64 created;
     /// The number of mint passes that have been purchased at auction. This
     /// differs from `created_` in that it does not count mint passes created
     /// for free via `reserve`.
-    uint256 purchased_;
+    uint64 purchased;
+    /// The current number of mint passes (i.e., valid ERC-721 tokens).
+    uint64 current;
+}
+
+contract MintPass is ERC721, Ownable {
+    using ScheduleMath for AuctionSchedule;
+
+    /// The maximum number of mint passes that may ever be created.
+    uint64 immutable maxCreated_;
+    SupplyStats supplyStats_;
+
+    mapping(address => Receipt) receipts_;
     /// Whether `withdrawProceeds` has been called yet.
     bool proceedsWithdrawn_;
 
@@ -162,7 +168,7 @@ contract MintPass is ERC721, Ownable {
     /// Emitted when the contract owner withdraws the auction proceeds.
     event ProceedsWithdrawal(uint256 amount);
 
-    constructor(uint256 _maxCreated) ERC721("", "") {
+    constructor(uint64 _maxCreated) ERC721("", "") {
         maxCreated_ = _maxCreated;
     }
 
@@ -179,12 +185,12 @@ contract MintPass is ERC721, Ownable {
     /// @dev Conforms to EIP-721's `ERC721Enumerable`, though we don't
     /// implement the rest of the functions in that extension.
     function totalSupply() external view returns (uint256) {
-        return supply_;
+        return supplyStats_.current;
     }
 
     /// Returns the total number of mint passes ever created.
     function totalCreated() external view returns (uint256) {
-        return created_;
+        return supplyStats_.created;
     }
 
     /// Returns the maximum number of mint passes that can ever be created
@@ -224,22 +230,32 @@ contract MintPass is ERC721, Ownable {
     /// If this creates the final mint pass, it also ends the auction by
     /// setting `endTimestamp_`. If this would create more mint passes than the
     /// max supply supports, it reverts.
-    function _createMintPasses(address recipient, uint256 count)
-        internal
-        returns (uint256)
-    {
+    function _createMintPasses(
+        address recipient,
+        uint256 count,
+        bool isPurchase
+    ) internal returns (uint256) {
         // Can't return a valid new token ID, and, more importantly, don't want
         // to stomp `endTimestamp_` if the auction is already over.
         if (count == 0) revert("MintPass: count is zero");
 
-        uint256 oldCreated = created_;
-        uint256 newCreated = oldCreated + count;
-        uint256 _maxCreated = maxCreated_;
-        if (newCreated > _maxCreated) revert("MintPass: minted out");
-        created_ = newCreated;
-        supply_ += count;
+        SupplyStats memory stats = supplyStats_;
+        uint256 oldCreated = stats.created;
 
-        if (newCreated == _maxCreated) endTimestamp_ = block.timestamp;
+        uint256 newCreated = stats.created + count;
+        if (newCreated > maxCreated_) revert("MintPass: minted out");
+
+        // Lossless since `newCreated <= maxCreated_ <= type(uint64).max`.
+        stats.created = _losslessSum(stats.current, count);
+        // Lossless since `current <= created <= type(uint64).max`.
+        stats.current = _losslessSum(stats.current, count);
+        if (isPurchase) {
+            // Lossless since `purchased <= created <= type(uint64).max`.
+            stats.purchased = _losslessSum(stats.purchased, count);
+        }
+
+        supplyStats_ = stats;
+        if (stats.created == maxCreated_) endTimestamp_ = block.timestamp;
 
         uint256 firstTokenId = oldCreated + 1;
         uint256 nextTokenId = firstTokenId;
@@ -247,6 +263,14 @@ contract MintPass is ERC721, Ownable {
             _safeMint(recipient, nextTokenId++);
         }
         return firstTokenId;
+    }
+
+    /// @dev Helper for `_createMintPasses`.
+    function _losslessSum(uint64 a, uint256 b) internal pure returns (uint64) {
+        uint256 sum = a + b;
+        uint64 result = uint64(sum);
+        assert(result == sum);
+        return result;
     }
 
     /// Purchases `count` mint passes at the current auction price. Reverts if
@@ -283,10 +307,13 @@ contract MintPass is ERC721, Ownable {
 
         receipts_[msg.sender] = receipt;
 
-        purchased_ += count;
         emit MintPassPurchase(msg.sender, priceEach, count);
-
-        return _createMintPasses(msg.sender, count);
+        return
+            _createMintPasses({
+                recipient: msg.sender,
+                count: count,
+                isPurchase: true
+            });
     }
 
     /// Creates one or more mint passes outside of the auction process, at no
@@ -296,7 +323,12 @@ contract MintPass is ERC721, Ownable {
         onlyOwner
         returns (uint256)
     {
-        return _createMintPasses(recipient, count);
+        return
+            _createMintPasses({
+                recipient: recipient,
+                count: count,
+                isPurchase: false
+            });
     }
 
     /// Computes the rebate that `buyer` is currently entitled to, and returns
@@ -347,7 +379,7 @@ contract MintPass is ERC721, Ownable {
         if (endTimestamp_ == 0) revert("MintPass: auction not ended");
         if (proceedsWithdrawn_) revert("MintPass: already withdrawn");
         proceedsWithdrawn_ = true;
-        uint256 proceeds = currentPrice() * purchased_;
+        uint256 proceeds = currentPrice() * supplyStats_.purchased;
         if (proceeds > address(this).balance) {
             // The auction price shouldn't increase, so this shouldn't happen.
             // In case it does, permit rescuing what we can.
@@ -392,7 +424,7 @@ contract MintPass is ERC721, Ownable {
     /// Burns a mint pass. Intended to be called when minting a QQL token.
     function burn(uint256 tokenId) external {
         if (msg.sender != burner_) revert("MintPass: unauthorized");
-        supply_--;
+        supplyStats_.current--;
         _burn(tokenId);
     }
 

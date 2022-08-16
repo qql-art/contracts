@@ -235,18 +235,18 @@ contract Shardwallet is ERC721, Initializable, Ownable {
         external
         returns (uint256 child, uint24 shareMicros)
     {
-        uint256 shareMicrosWord = 0;
+        uint256 shareMicros256 = 0;
         for (uint256 i = 0; i < parents.length; i++) {
-            shareMicrosWord += shardData_[parents[i]].shareMicros;
+            shareMicros256 += shardData_[parents[i]].shareMicros;
         }
-        shareMicros = uint24(shareMicrosWord);
+        shareMicros = uint24(shareMicros256);
         ChildSpec[] memory splits = new ChildSpec[](1);
         splits[0].recipient = msg.sender;
         splits[0].shareMicros = shareMicros;
         child = reforge(parents, splits);
         // Truncation should be lossless, since `reforge` succeeding means that
         // there weren't any duplicates in the parent list.
-        assert(shareMicrosWord == shareMicros);
+        assert(shareMicros256 == shareMicros);
         return (child, shareMicros);
     }
 

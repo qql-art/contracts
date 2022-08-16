@@ -283,15 +283,15 @@ describe("MintPass", () => {
       await mp.updateAuctionSchedule({
         startTimestamp,
         dropPeriodSeconds: 60,
+        startGwei: 50e9, // 50 ETH starting price
+        dropGwei: 0.25e9, // drop 2 ETH/minute, then 1, then 0.5, then 0.25
+        reserveGwei: 2e9, // 2 ETH reserve price
         n1: 10,
         n2: 15,
         n3: 20,
         c1: 8,
         c2: 4,
         c3: 2,
-        startGwei: 50e9, // 50 ETH starting price
-        dropGwei: 0.25e9, // drop 2 ETH/minute, then 1, then 0.5, then 0.25
-        reserveGwei: 5e9, // 1 ETH reserve price
       });
 
       async function checkPriceSeconds({ label, seconds, expected }) {
@@ -332,10 +332,15 @@ describe("MintPass", () => {
       // ...
       await checkPrice({ minutes: 44, expected: gwei(5.5e9) });
       await checkPrice({ minutes: 45, expected: gwei(5.0e9) });
-      await checkPrice({ minutes: 46, expected: gwei(5.0e9) }); // hit reserve
-      await checkPrice({ minutes: 47, expected: gwei(5.0e9) });
+      await checkPrice({ minutes: 46, expected: gwei(4.75e9) });
+      await checkPrice({ minutes: 47, expected: gwei(4.5e9) });
       // ...
-      expect(await mp.priceAt(ethers.constants.MaxUint256)).to.equal(gwei(5e9));
+      await checkPrice({ minutes: 56, expected: gwei(2.25e9) });
+      await checkPrice({ minutes: 57, expected: gwei(2.0e9) }); // reserve
+      await checkPrice({ minutes: 58, expected: gwei(2.0e9) });
+      await checkPrice({ minutes: 59, expected: gwei(2.0e9) });
+      // ...
+      expect(await mp.priceAt(ethers.constants.MaxUint256)).to.equal(gwei(2e9));
     });
 
     it("fails cleanly if a collector tries to buy more than 2^256 wei worth of passes", async () => {

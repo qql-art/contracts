@@ -145,8 +145,8 @@ contract Shardwallet is ERC721, Initializable, Ownable {
     /// the children must add to the total shares of the parents.
     ///
     /// The children are assigned consecutive IDs, with the same order as given
-    /// by `splits`. The return value is the ID of the first child shard.
-    function reforge(uint256[] memory parents, ChildSpec[] memory splits)
+    /// by `children`. The return value is the ID of the first child shard.
+    function reforge(uint256[] memory parents, ChildSpec[] memory children)
         public
         returns (uint256)
     {
@@ -154,13 +154,13 @@ contract Shardwallet is ERC721, Initializable, Ownable {
             // Don't allow arbitrary callers to mint zero-share tokens.
             revert("Shardwallet: no parents");
         }
-        if (splits.length > type(uint232).max) {
+        if (children.length > type(uint232).max) {
             // Seems extraordinarily infeasible due to gas limitations.
             revert();
         }
 
         uint256 firstChildId = nextTokenId_;
-        nextTokenId_ = firstChildId + splits.length;
+        nextTokenId_ = firstChildId + children.length;
         parents_[firstChildId] = parents;
 
         uint24 totalShareMicros = 0;
@@ -173,10 +173,10 @@ contract Shardwallet is ERC721, Initializable, Ownable {
             totalShareMicros += shardData_[parent].shareMicros;
         }
 
-        uint24[] memory childrenSharesMicros = new uint24[](splits.length);
+        uint24[] memory childrenSharesMicros = new uint24[](children.length);
         uint256 nextTokenId = firstChildId;
-        for (uint256 i = 0; i < splits.length; i++) {
-            uint24 micros = splits[i].shareMicros;
+        for (uint256 i = 0; i < children.length; i++) {
+            uint24 micros = children[i].shareMicros;
             if (micros == 0) {
                 revert("Shardwallet: null share");
             }
@@ -189,7 +189,7 @@ contract Shardwallet is ERC721, Initializable, Ownable {
             shardData_[child] = ShardData({
                 shareMicros: micros,
                 firstSibling: firstChildId,
-                numSiblings: uint232(splits.length) // lossless; checked above
+                numSiblings: uint232(children.length) // lossless; checked above
             });
         }
         if (totalShareMicros != 0) {
@@ -203,26 +203,26 @@ contract Shardwallet is ERC721, Initializable, Ownable {
         });
 
         nextTokenId = firstChildId;
-        for (uint256 i = 0; i < splits.length; i++) {
-            _safeMint(splits[i].recipient, nextTokenId++);
+        for (uint256 i = 0; i < children.length; i++) {
+            _safeMint(children[i].recipient, nextTokenId++);
         }
 
         return firstChildId;
     }
 
     /// Splits a shard into one or more child shards, with shares and ownership
-    /// distributed according to `splits`. The caller must be an owner or
+    /// distributed according to `children`. The caller must be an owner or
     /// operator of the parent shard.
     ///
     /// The children are assigned consecutive IDs, with the same order as given
-    /// by `splits`. The return value is the ID of the first child shard.
-    function split(uint256 tokenId, ChildSpec[] memory splits)
+    /// by `children`. The return value is the ID of the first child shard.
+    function split(uint256 tokenId, ChildSpec[] memory children)
         external
         returns (uint256 firstChildId)
     {
         uint256[] memory parents = new uint256[](1);
         parents[0] = tokenId;
-        return reforge(parents, splits);
+        return reforge(parents, children);
     }
 
     /// Merges multiple shards into one new shard, owned by the caller. The
@@ -240,10 +240,10 @@ contract Shardwallet is ERC721, Initializable, Ownable {
             shareMicros256 += shardData_[parents[i]].shareMicros;
         }
         shareMicros = uint24(shareMicros256);
-        ChildSpec[] memory splits = new ChildSpec[](1);
-        splits[0].recipient = msg.sender;
-        splits[0].shareMicros = shareMicros;
-        child = reforge(parents, splits);
+        ChildSpec[] memory children = new ChildSpec[](1);
+        children[0].recipient = msg.sender;
+        children[0].shareMicros = shareMicros;
+        child = reforge(parents, children);
         // Truncation should be lossless, since `reforge` succeeding means that
         // there weren't any duplicates in the parent list.
         assert(shareMicros256 == shareMicros);

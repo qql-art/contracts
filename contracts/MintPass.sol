@@ -25,8 +25,8 @@ import "./IManifold.sol";
 /// (3) The price never drops below `reserveGwei` gwei.
 ///
 /// For example, suppose that `dropPeriodSeconds` is 60, `startGwei` is 100e9,
-/// `dropGwei` is 0.5e9, `[n1, n2, n3]` is `[10, 15, 20]`, and `[c1, c2, c3]`
-/// is [8, 4, 2]`. Then: the price starts at 100 ETH, then drops in 4 ETH
+/// `dropGwei` is 5e8, `[n1, n2, n3]` is `[10, 15, 20]`, and `[c1, c2, c3, c4]`
+/// is [8, 4, 2, 1]`. Then: the price starts at 100 ETH, then drops in 4 ETH
 /// increments down to 60 ETH, then drops in 2 ETH increments down to 30 ETH,
 /// then drops in 1 ETH increments down to 10 ETH, then drops in 0.5 ETH
 /// increments down to the reserve price.

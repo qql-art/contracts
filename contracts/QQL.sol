@@ -10,13 +10,13 @@ struct TokenData {
     string data;
 }
 
-contract TRNF is ERC721, Ownable {
+contract QQL is ERC721, Ownable {
     Ticket private ticket;
     string private baseURI;
     mapping(uint256 => TokenData) public tokenData;
     mapping(uint256 => string) public scriptPieces;
 
-    constructor(Ticket _ticket) ERC721("TRNF", "TRNF") {
+    constructor(Ticket _ticket) ERC721("QQL", "QQL") {
         ticket = _ticket;
     }
 

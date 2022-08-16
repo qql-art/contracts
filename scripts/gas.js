@@ -33,14 +33,14 @@ TEST_CASES.push(async function* deployShardwallet(props) {
   yield ["Shardwallet deploy", await deployTransaction.wait()];
 });
 
-TEST_CASES.push(async function* deployTicketAndTrnf(props) {
+TEST_CASES.push(async function* deployTicketAndQql(props) {
   const ticket = await props.factories.Ticket.deploy(999);
   await ticket.deployed();
   yield ["Ticket deploy", await ticket.deployTransaction.wait()];
 
-  const trnf = await props.factories.TRNF.deploy(ticket.address);
-  await trnf.deployed();
-  yield ["TRNF deploy", await trnf.deployTransaction.wait()];
+  const qql = await props.factories.QQL.deploy(ticket.address);
+  await qql.deployed();
+  yield ["QQL deploy", await qql.deployTransaction.wait()];
 });
 
 TEST_CASES.push(async function* shardwalletBasics(props) {
@@ -234,7 +234,7 @@ async function main() {
   const contractNames = [
     "Shardwallet",
     "ShardwalletFactory",
-    "TRNF",
+    "QQL",
     "TestERC20",
     "Ticket",
   ];

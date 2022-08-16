@@ -3,62 +3,87 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./Ticket.sol";
-
-struct TokenData {
-    address minter;
-    string data;
-}
+import "./MintPass.sol";
+import "./ITokenUriDelegate.sol";
 
 contract QQL is ERC721, Ownable {
-    Ticket private ticket;
-    string private baseURI;
-    mapping(uint256 => TokenData) public tokenData;
-    mapping(uint256 => string) public scriptPieces;
+    MintPass immutable pass_;
+    uint256 nextTokenId_ = 1;
+    mapping(uint256 => bytes32) tokenHash_;
+    mapping(bytes32 => uint256) tokenHashToId_;
+    mapping(uint256 => string) scriptPieces_;
+    ITokenUriDelegate tokenUriDelegate_;
 
-    constructor(Ticket _ticket) ERC721("QQL", "QQL") {
-        ticket = _ticket;
+    constructor(MintPass pass) ERC721("", "") {
+        pass_ = pass;
     }
 
-    function setBaseURI(string memory baseURI_) external onlyOwner {
-        baseURI = baseURI_;
+    function name() public pure override returns (string memory) {
+        return "QQL";
     }
 
-    function _baseURI() internal view override returns (string memory) {
-        return baseURI;
+    function symbol() public pure override returns (string memory) {
+        return "QQL";
     }
 
     function setScriptPiece(uint256 id, string memory data) external onlyOwner {
-        require(
-            bytes(scriptPieces[id]).length == 0,
-            "script pieces are immutable once set"
-        );
-        scriptPieces[id] = data;
+        if (bytes(scriptPieces_[id]).length != 0)
+            revert("QQL: script pieces are immutable");
+
+        scriptPieces_[id] = data;
     }
 
-    modifier onlyTicketOwnerOrApproved(uint256 tokenId) {
-        bool ownerOrApproved = false;
-        address ticketOwner = ticket.ownerOf(tokenId);
-        if (ticketOwner == msg.sender) {
-            ownerOrApproved = true;
-        } else if (ticket.getApproved(tokenId) == msg.sender) {
-            ownerOrApproved = true;
-        } else if (ticket.isApprovedForAll(ticketOwner, msg.sender)) {
-            ownerOrApproved = true;
-        }
-        require(
-            ownerOrApproved,
-            "prospective minter is not owner or approved for ticket"
-        );
-        _;
+    function scriptPiece(uint256 id) external view returns (string memory) {
+        return scriptPieces_[id];
     }
 
-    function mint(uint256 tokenId, string memory data)
-        external
-        onlyTicketOwnerOrApproved(tokenId)
-    {
-        ticket.burn(tokenId);
+    function mint(uint256 mintPassId, bytes32 hash) external returns (uint256) {
+        if (!pass_.isApprovedOrOwner(msg.sender, mintPassId))
+            revert("QQL: not pass owner or approved");
+        if (bytes20(msg.sender) != bytes20(hash))
+            revert("QQL: minter does not match hash");
+        if (tokenHashToId_[hash] != 0) revert("QQL: hash already used");
+
+        uint256 tokenId = nextTokenId_++;
+        tokenHash_[tokenId] = hash;
+        tokenHashToId_[hash] = tokenId;
+        pass_.burn(mintPassId);
         _safeMint(msg.sender, tokenId);
-        tokenData[tokenId] = TokenData({minter: msg.sender, data: data});
+        return tokenId;
+    }
+
+    /// Returns the hash associated with the given QQL token. Returns
+    /// `bytes32(0)` if and only if the token does not exist.
+    function tokenHash(uint256 tokenId) external view returns (bytes32) {
+        return tokenHash_[tokenId];
+    }
+
+    /// Returns the tokenId associated with the given hash. Returns 0 if
+    /// and only if no token was ever minted with that hash.
+    function tokenHashToId(bytes32 hash) external view returns (uint256) {
+        return tokenHashToId_[hash];
+    }
+
+    function setTokenUriDelegate(ITokenUriDelegate delegate)
+        external
+        onlyOwner
+    {
+        tokenUriDelegate_ = delegate;
+    }
+
+    function tokenUriDelegate() external view returns (ITokenUriDelegate) {
+        return tokenUriDelegate_;
+    }
+
+    function tokenURI(uint256 tokenId)
+        public
+        view
+        override
+        returns (string memory)
+    {
+        if (!_exists(tokenId)) revert("ERC721: invalid token ID");
+        ITokenUriDelegate delegate = tokenUriDelegate_;
+        if (address(delegate) == address(0)) return "";
+        return delegate.tokenURI(tokenId);
     }
 }

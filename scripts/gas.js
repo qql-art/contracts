@@ -33,12 +33,12 @@ TEST_CASES.push(async function* deployShardwallet(props) {
   yield ["Shardwallet deploy", await deployTransaction.wait()];
 });
 
-TEST_CASES.push(async function* deployTicketAndQql(props) {
-  const ticket = await props.factories.Ticket.deploy(999);
-  await ticket.deployed();
-  yield ["Ticket deploy", await ticket.deployTransaction.wait()];
+TEST_CASES.push(async function* deployMintPassAndQql(props) {
+  const mp = await props.factories.MintPass.deploy(999);
+  await mp.deployed();
+  yield ["MintPass deploy", await mp.deployTransaction.wait()];
 
-  const qql = await props.factories.QQL.deploy(ticket.address);
+  const qql = await props.factories.QQL.deploy(mp.address);
   await qql.deployed();
   yield ["QQL deploy", await qql.deployTransaction.wait()];
 });
@@ -232,11 +232,11 @@ async function main() {
     return patterns.some((p) => name.match(p));
   }
   const contractNames = [
+    "MintPass",
+    "QQL",
     "Shardwallet",
     "ShardwalletFactory",
-    "QQL",
     "TestERC20",
-    "Ticket",
   ];
   const factories = {};
   await Promise.all(

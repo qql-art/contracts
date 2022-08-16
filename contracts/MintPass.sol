@@ -19,7 +19,7 @@ import "./ITokenUriDelegate.sol";
 ///     (a) Each of the first `n1` drops is for `c1 * dropGwei` gwei.
 ///     (b) Each of the next `n2` drops is for `c2 * dropGwei` gwei.
 ///     (c) Each of the next `n3` drops is for `c3 * dropGwei` gwei.
-///     (d) Each subsequent drop is for `dropGwei` gwei.
+///     (d) Each subsequent drop is for `c4 * dropGwei` gwei.
 ///
 /// (3) The price never drops below `reserveGwei` gwei.
 ///
@@ -34,7 +34,7 @@ import "./ITokenUriDelegate.sol";
 /// not be scheduled yet, and the price is `type(uint256).max` at all times.
 struct AuctionSchedule {
     uint40 startTimestamp;
-    uint24 dropPeriodSeconds;
+    uint16 dropPeriodSeconds;
     uint48 startGwei;
     uint48 dropGwei;
     uint48 reserveGwei;
@@ -44,6 +44,7 @@ struct AuctionSchedule {
     uint8 c1;
     uint8 c2;
     uint8 c3;
+    uint8 c4;
 }
 
 library ScheduleMath {
@@ -71,7 +72,7 @@ library ScheduleMath {
         (drops, priceGwei) = doDrop(s.n1, drops, priceGwei, s.c1 * dropGwei);
         (drops, priceGwei) = doDrop(s.n2, drops, priceGwei, s.c2 * dropGwei);
         (drops, priceGwei) = doDrop(s.n3, drops, priceGwei, s.c3 * dropGwei);
-        (drops, priceGwei) = doDrop(inf, drops, priceGwei, dropGwei);
+        (drops, priceGwei) = doDrop(inf, drops, priceGwei, s.c4 * dropGwei);
 
         if (priceGwei < s.reserveGwei) priceGwei = s.reserveGwei;
         return priceGwei * 1 gwei;

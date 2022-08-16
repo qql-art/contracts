@@ -80,6 +80,38 @@ describe("QQL", () => {
     });
   });
 
+  it("token royalty recipient works", async () => {
+    const { passHolder, qql, hash, signers } = await setup();
+    const owner = signers[0];
+    expect(await qql.tokenRoyaltyRecipient(1)).to.equal(
+      ethers.constants.AddressZero
+    );
+    await qql.connect(passHolder).mint(1, hash);
+    expect(await qql.tokenRoyaltyRecipient(1)).to.equal(passHolder.address);
+    const fail1 = qql.changeTokenRoyaltyRecipient(1, owner.address);
+    await expect(fail1).to.be.revertedWith("QQL: unauthorized");
+    const fail2 = qql
+      .connect(passHolder)
+      .changeTokenRoyaltyRecipient(1, ethers.constants.AddressZero);
+    await expect(fail2).to.be.revertedWith("QQL: Can't set zero address");
+    await qql.connect(passHolder).changeTokenRoyaltyRecipient(1, owner.address);
+    expect(await qql.tokenRoyaltyRecipient(1)).to.equal(owner.address);
+  });
+
+  it("project royalty recipient works", async () => {
+    const { passHolder, qql, hash, signers } = await setup();
+    const owner = signers[0];
+    expect(await qql.projectRoyaltyRecipient()).to.equal(owner.address);
+
+    await qql.setProjectRoyaltyRecipient(passHolder.address);
+    expect(await qql.projectRoyaltyRecipient()).to.equal(passHolder.address);
+
+    const fail = qql
+      .connect(passHolder)
+      .setProjectRoyaltyRecipient(owner.address);
+    await expect(fail).to.be.revertedWith("not the owner");
+  });
+
   it("script pieces work", async () => {
     const mintPass = await MintPass.deploy(9);
     await mintPass.deployed();

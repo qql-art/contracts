@@ -12,10 +12,20 @@ contract QQL is ERC721, Ownable {
     mapping(uint256 => bytes32) tokenHash_;
     mapping(bytes32 => uint256) tokenHashToId_;
     mapping(uint256 => string) scriptPieces_;
+    mapping(uint256 => address) tokenRoyaltyRecipient_;
+    address projectRoyaltyRecipient_;
     ITokenUriDelegate tokenUriDelegate_;
+
+    event TokenRoyaltyRecipientChange(
+        uint256 indexed tokenId,
+        address indexed newRecipient
+    );
+
+    event ProjectRoyaltyRecipientChange(address indexed newRecipient);
 
     constructor(MintPass pass) ERC721("", "") {
         pass_ = pass;
+        setProjectRoyaltyRecipient(msg.sender);
     }
 
     function name() public pure override returns (string memory) {
@@ -47,9 +57,40 @@ contract QQL is ERC721, Ownable {
         uint256 tokenId = nextTokenId_++;
         tokenHash_[tokenId] = hash;
         tokenHashToId_[hash] = tokenId;
+        tokenRoyaltyRecipient_[tokenId] = msg.sender;
         pass_.burn(mintPassId);
         _safeMint(msg.sender, tokenId);
         return tokenId;
+    }
+
+    function setProjectRoyaltyRecipient(address recipient) public onlyOwner {
+        projectRoyaltyRecipient_ = recipient;
+        emit ProjectRoyaltyRecipientChange(recipient);
+    }
+
+    function projectRoyaltyRecipient() external view returns (address) {
+        return projectRoyaltyRecipient_;
+    }
+
+    function tokenRoyaltyRecipient(uint256 tokenId)
+        external
+        view
+        returns (address)
+    {
+        return tokenRoyaltyRecipient_[tokenId];
+    }
+
+    function changeTokenRoyaltyRecipient(uint256 tokenId, address newRecipient)
+        external
+    {
+        if (tokenRoyaltyRecipient_[tokenId] != msg.sender) {
+            revert("QQL: unauthorized");
+        }
+        if (newRecipient == address(0)) {
+            revert("QQL: Can't set zero address as token royalty recipient");
+        }
+        emit TokenRoyaltyRecipientChange(tokenId, newRecipient);
+        tokenRoyaltyRecipient_[tokenId] = newRecipient;
     }
 
     /// Returns the hash associated with the given QQL token. Returns

@@ -45,8 +45,8 @@ library OptionalUints {
 
 struct ShardData {
     uint24 shareMicros;
-    uint64 firstSibling;
-    uint64 numSiblings; // including self
+    uint232 numSiblings; // including self
+    uint256 firstSibling;
 }
 
 struct ChildSpec {
@@ -73,26 +73,15 @@ struct ChildSpec {
 /// a shard that must be active, or `shardId` to refer to any shard. Any
 /// parameter of type `IERC20` may be `address(0)` to denote ETH or a non-zero
 /// address to denote an ERC-20 token.
-///
-/// @dev
-/// Shard IDs are represented internally as `uint64`s. This implies that not
-/// more than 2^64 shards can be created (actually 2^64 - 2), which is not a
-/// big deal since IDs are sequentially allocated and so it would take an
-/// enormous amount of gas to approach that point. Because the ERC-721 APIs all
-/// use `uint256` token IDs, we also use `uint256`s at our API boundaries for
-/// compatibility; only internal data stuctures use `uint64`s for shard IDs.
-/// Most of the time, this shouldn't be a problem; just be careful not to
-/// accidentally truncate a `uint256` to a `uint64` without first checking
-/// whether the shard exists or similar.
 contract Shardwallet is ERC721, Initializable, Ownable {
     using OptionalUints for OptionalUint;
 
     uint24 internal constant ONE_MILLION = 1_000_000;
 
-    uint64 nextTokenId_;
-    mapping(uint64 => ShardData) shardData_;
-    mapping(uint64 => uint64[]) parents_; // keyed by ID of first child
-    mapping(IERC20 => mapping(uint64 => OptionalUint)) claimRecord_;
+    uint256 nextTokenId_;
+    mapping(uint256 => ShardData) shardData_;
+    mapping(uint256 => uint256[]) parents_; // keyed by ID of first child
+    mapping(IERC20 => mapping(uint256 => OptionalUint)) claimRecord_;
 
     mapping(IERC20 => uint256) distributed_;
 
@@ -165,36 +154,27 @@ contract Shardwallet is ERC721, Initializable, Ownable {
             // Don't allow arbitrary callers to mint zero-share tokens.
             revert("Shardwallet: no parents");
         }
-        uint64 firstChildId = nextTokenId_;
-        {
-            uint256 newNextTokenId = firstChildId + splits.length;
-            if (newNextTokenId > type(uint64).max) {
-                // Technically possible, but would require paying an enormous
-                // amount of gas to mint this many tokens.
-                revert();
-            }
-            nextTokenId_ = uint64(newNextTokenId);
+        if (splits.length > type(uint232).max) {
+            // Seems extraordinarily infeasible due to gas limitations.
+            revert();
         }
 
+        uint256 firstChildId = nextTokenId_;
+        nextTokenId_ = firstChildId + splits.length;
+        parents_[firstChildId] = parents;
+
         uint24 totalShareMicros = 0;
-        uint64[] memory parents64 = new uint64[](parents.length);
         for (uint256 i = 0; i < parents.length; i++) {
             uint256 parent = parents[i];
             if (!_isApprovedOrOwner(msg.sender, parent)) {
                 revert("Shardwallet: unauthorized");
             }
             _burn(parent);
-            uint64 parent64 = uint64(parent);
-            // Truncation should be lossless, because we only mint tokens with
-            // IDs that fit into `uint64`s, and we just burned this token.
-            assert(parent64 == parent);
-            parents64[i] = parent64;
-            totalShareMicros += shardData_[parent64].shareMicros;
+            totalShareMicros += shardData_[parent].shareMicros;
         }
-        parents_[firstChildId] = parents64;
 
         uint24[] memory childrenSharesMicros = new uint24[](splits.length);
-        uint64 nextTokenId = firstChildId;
+        uint256 nextTokenId = firstChildId;
         for (uint256 i = 0; i < splits.length; i++) {
             uint24 micros = splits[i].shareMicros;
             if (micros == 0) {
@@ -205,13 +185,11 @@ contract Shardwallet is ERC721, Initializable, Ownable {
             }
             totalShareMicros -= micros;
             childrenSharesMicros[i] = micros;
-            uint64 child = nextTokenId++;
-            // Cast is lossless because `firstChildId + splits.length` was
-            // previously shown to fit in a `uint64`.
+            uint256 child = nextTokenId++;
             shardData_[child] = ShardData({
                 shareMicros: micros,
                 firstSibling: firstChildId,
-                numSiblings: uint64(splits.length)
+                numSiblings: uint232(splits.length) // lossless; checked above
             });
         }
         if (totalShareMicros != 0) {
@@ -259,11 +237,7 @@ contract Shardwallet is ERC721, Initializable, Ownable {
     {
         uint256 shareMicrosWord = 0;
         for (uint256 i = 0; i < parents.length; i++) {
-            // If this cast to `uint64` is lossy, then `parents[i]` can't be a
-            // real token, so we'll fail anyway when `reforge` checks that
-            // `msg.sender` can operate the parent (which is provided before
-            // truncation).
-            shareMicrosWord += shardData_[uint64(parents[i])].shareMicros;
+            shareMicrosWord += shardData_[parents[i]].shareMicros;
         }
         shareMicros = uint24(shareMicrosWord);
         ChildSpec[] memory splits = new ChildSpec[](1);
@@ -332,28 +306,26 @@ contract Shardwallet is ERC721, Initializable, Ownable {
         public
         returns (uint256)
     {
-        uint64 shardId64 = uint64(shardId);
-        if (shardId64 != shardId) return 0; // not a valid shard
         {
-            OptionalUint cr = claimRecord_[currency][shardId64];
+            OptionalUint cr = claimRecord_[currency][shardId];
             if (cr.isPresent()) return cr.decode();
         }
-        if (shardId64 == 1) {
+        if (shardId == 1) {
             // Genesis token: no parents, so no claim to inherit.
             return 0;
         }
-        ShardData memory data = shardData_[shardId64];
+        ShardData memory data = shardData_[shardId];
         if (data.shareMicros == 0) {
             // No claim, but do not store, as this token could later be created
             // as a child of a token that *has* claimed.
             return 0;
         }
 
-        assert(shardId64 >= data.firstSibling);
-        uint256 childIndex = shardId64 - data.firstSibling;
+        assert(shardId >= data.firstSibling);
+        uint256 childIndex = shardId - data.firstSibling;
         assert(childIndex < data.numSiblings);
 
-        uint64[] memory parents = parents_[data.firstSibling];
+        uint256[] memory parents = parents_[data.firstSibling];
         uint256 parentsClaimed = 0;
         for (uint256 i = 0; i < parents.length; i++) {
             // Note: potential optimization here if the parent was burned
@@ -365,8 +337,8 @@ contract Shardwallet is ERC721, Initializable, Ownable {
         uint24[] memory siblingSharesMicros = new uint24[](data.numSiblings);
         for (uint256 i = 0; i < data.numSiblings; i++) {
             uint24 shareMicros;
-            uint64 sibling = data.firstSibling + uint64(i);
-            if (sibling == shardId64) {
+            uint256 sibling = data.firstSibling + i;
+            if (sibling == shardId) {
                 shareMicros = data.shareMicros;
             } else {
                 shareMicros = shardData_[sibling].shareMicros;
@@ -378,20 +350,18 @@ contract Shardwallet is ERC721, Initializable, Ownable {
             siblingSharesMicros,
             childIndex
         );
-        claimRecord_[currency][shardId64] = OptionalUints.encode(claimed);
+        claimRecord_[currency][shardId] = OptionalUints.encode(claimed);
         return claimed;
     }
 
     function _claimSingleCurrencyTo(
-        uint256 tokenId256,
+        uint256 tokenId,
         IERC20 currency,
         address payable recipient
     ) internal {
-        if (!_isApprovedOrOwner(msg.sender, tokenId256)) {
+        if (!_isApprovedOrOwner(msg.sender, tokenId)) {
             revert("Shardwallet: unauthorized");
         }
-        uint64 tokenId = uint64(tokenId256);
-        assert(tokenId == tokenId256);
         uint24 shareMicros = shardData_[tokenId].shareMicros;
 
         uint256 balance;
@@ -465,9 +435,7 @@ contract Shardwallet is ERC721, Initializable, Ownable {
     /// has existed, since each shard must have a positive share). This method
     /// never reverts.
     function getShareMicros(uint256 shardId) external view returns (uint24) {
-        uint64 shardId64 = uint64(shardId);
-        if (shardId64 != shardId) return 0;
-        return shardData_[shardId64].shareMicros;
+        return shardData_[shardId].shareMicros;
     }
 
     /// Gets the parent shards of the given shard.
@@ -479,9 +447,7 @@ contract Shardwallet is ERC721, Initializable, Ownable {
         view
         returns (uint256[] memory)
     {
-        uint64 shardId64 = uint64(shardId);
-        if (shardId64 != shardId) return new uint256[](0);
-        uint64[] memory parents = parents_[shardData_[shardId64].firstSibling];
+        uint256[] memory parents = parents_[shardData_[shardId].firstSibling];
         uint256[] memory result = new uint256[](parents.length);
         for (uint256 i = 0; i < result.length; i++) {
             result[i] = parents[i];

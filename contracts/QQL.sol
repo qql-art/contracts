@@ -13,8 +13,12 @@ contract QQL is ERC721, Ownable {
     mapping(uint256 => bytes32) tokenHash_;
     mapping(bytes32 => uint256) tokenHashToId_;
     mapping(uint256 => string) scriptPieces_;
+
     mapping(uint256 => address payable) tokenRoyaltyRecipient_;
     address payable projectRoyaltyRecipient_;
+    uint256 constant PROJECT_ROYALTY_BPS = 500; // 5%
+    uint256 constant TOKEN_ROYALTY_BPS = 200; // 2%
+
     ITokenUriDelegate tokenUriDelegate_;
 
     event TokenRoyaltyRecipientChange(
@@ -109,8 +113,8 @@ contract QQL is ERC721, Ownable {
         if (recipients[1] == address(0)) {
             revert("QQL: royalty for nonexistent token");
         }
-        bps[0] = 500;
-        bps[1] = 200;
+        bps[0] = PROJECT_ROYALTY_BPS;
+        bps[1] = TOKEN_ROYALTY_BPS;
     }
 
     /// Returns the hash associated with the given QQL token. Returns

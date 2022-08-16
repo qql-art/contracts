@@ -152,6 +152,8 @@ contract MintPass is ERC721, Ownable, IManifold {
 
     address payable projectRoyaltyRecipient_;
     address payable platformRoyaltyRecipient_;
+    uint256 constant PROJECT_ROYALTY_BPS = 700; // 7%
+    uint256 constant PLATFORM_ROYALTY_BPS = 100; // 1%
 
     ITokenUriDelegate tokenUriDelegate_;
 
@@ -469,8 +471,8 @@ contract MintPass is ERC721, Ownable, IManifold {
         bps = new uint256[](2);
         recipients[0] = projectRoyaltyRecipient_;
         recipients[1] = platformRoyaltyRecipient_;
-        bps[0] = 700;
-        bps[1] = 100;
+        bps[0] = PROJECT_ROYALTY_BPS;
+        bps[1] = PLATFORM_ROYALTY_BPS;
     }
 
     function setProjectRoyaltyRecipient(address payable projectRecipient)

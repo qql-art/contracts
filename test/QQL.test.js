@@ -101,7 +101,9 @@ describe("QQL", () => {
   it("project royalty recipient works", async () => {
     const { passHolder, qql, hash, signers } = await setup();
     const owner = signers[0];
-    expect(await qql.projectRoyaltyRecipient()).to.equal(owner.address);
+    expect(await qql.projectRoyaltyRecipient()).to.equal(
+      ethers.constants.AddressZero
+    );
 
     await qql.setProjectRoyaltyRecipient(passHolder.address);
     expect(await qql.projectRoyaltyRecipient()).to.equal(passHolder.address);
@@ -110,6 +112,29 @@ describe("QQL", () => {
       .connect(passHolder)
       .setProjectRoyaltyRecipient(owner.address);
     await expect(fail).to.be.revertedWith("not the owner");
+  });
+
+  it("getRoyalties works", async () => {
+    const { passHolder, qql, hash, signers } = await setup();
+    const owner = signers[0];
+    await qql.setProjectRoyaltyRecipient(owner.address);
+
+    const fail = qql.getRoyalties(1);
+    await expect(fail).to.be.revertedWith("QQL: royalty for nonexistent token");
+
+    await qql.connect(passHolder).mint(1, hash);
+    expect(await qql.tokenRoyaltyRecipient(1)).to.equal(passHolder.address);
+    expect(await qql.getRoyalties(1)).to.deep.equal([
+      [owner.address, passHolder.address],
+      [ethers.BigNumber.from(500), ethers.BigNumber.from(200)],
+    ]);
+
+    await qql.connect(passHolder).changeTokenRoyaltyRecipient(1, owner.address);
+    expect(await qql.tokenRoyaltyRecipient(1)).to.equal(owner.address);
+    expect(await qql.getRoyalties(1)).to.deep.equal([
+      [owner.address, owner.address],
+      [ethers.BigNumber.from(500), ethers.BigNumber.from(200)],
+    ]);
   });
 
   it("script pieces work", async () => {

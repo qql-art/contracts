@@ -12,8 +12,8 @@ contract QQL is ERC721, Ownable {
     mapping(uint256 => bytes32) tokenHash_;
     mapping(bytes32 => uint256) tokenHashToId_;
     mapping(uint256 => string) scriptPieces_;
-    mapping(uint256 => address) tokenRoyaltyRecipient_;
-    address projectRoyaltyRecipient_;
+    mapping(uint256 => address payable) tokenRoyaltyRecipient_;
+    address payable projectRoyaltyRecipient_;
     ITokenUriDelegate tokenUriDelegate_;
 
     event TokenRoyaltyRecipientChange(
@@ -25,7 +25,6 @@ contract QQL is ERC721, Ownable {
 
     constructor(MintPass pass) ERC721("", "") {
         pass_ = pass;
-        setProjectRoyaltyRecipient(msg.sender);
     }
 
     function name() public pure override returns (string memory) {
@@ -57,18 +56,21 @@ contract QQL is ERC721, Ownable {
         uint256 tokenId = nextTokenId_++;
         tokenHash_[tokenId] = hash;
         tokenHashToId_[hash] = tokenId;
-        tokenRoyaltyRecipient_[tokenId] = msg.sender;
+        tokenRoyaltyRecipient_[tokenId] = payable(msg.sender);
         pass_.burn(mintPassId);
         _safeMint(msg.sender, tokenId);
         return tokenId;
     }
 
-    function setProjectRoyaltyRecipient(address recipient) public onlyOwner {
+    function setProjectRoyaltyRecipient(address payable recipient)
+        public
+        onlyOwner
+    {
         projectRoyaltyRecipient_ = recipient;
         emit ProjectRoyaltyRecipientChange(recipient);
     }
 
-    function projectRoyaltyRecipient() external view returns (address) {
+    function projectRoyaltyRecipient() external view returns (address payable) {
         return projectRoyaltyRecipient_;
     }
 
@@ -80,9 +82,10 @@ contract QQL is ERC721, Ownable {
         return tokenRoyaltyRecipient_[tokenId];
     }
 
-    function changeTokenRoyaltyRecipient(uint256 tokenId, address newRecipient)
-        external
-    {
+    function changeTokenRoyaltyRecipient(
+        uint256 tokenId,
+        address payable newRecipient
+    ) external {
         if (tokenRoyaltyRecipient_[tokenId] != msg.sender) {
             revert("QQL: unauthorized");
         }
@@ -91,6 +94,22 @@ contract QQL is ERC721, Ownable {
         }
         emit TokenRoyaltyRecipientChange(tokenId, newRecipient);
         tokenRoyaltyRecipient_[tokenId] = newRecipient;
+    }
+
+    function getRoyalties(uint256 tokenId)
+        external
+        view
+        returns (address payable[] memory recipients, uint256[] memory bps)
+    {
+        recipients = new address payable[](2);
+        bps = new uint256[](2);
+        recipients[0] = projectRoyaltyRecipient_;
+        recipients[1] = tokenRoyaltyRecipient_[tokenId];
+        if (recipients[1] == address(0)) {
+            revert("QQL: royalty for nonexistent token");
+        }
+        bps[0] = 500;
+        bps[1] = 200;
     }
 
     /// Returns the hash associated with the given QQL token. Returns

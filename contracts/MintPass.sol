@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 import "./ITokenUriDelegate.sol";
+import "./IManifold.sol";
 
 /// @dev
 /// Parameters for a piecewise-constant price function with the following
@@ -128,7 +129,7 @@ struct SupplyStats {
     uint64 current;
 }
 
-contract MintPass is ERC721, Ownable {
+contract MintPass is ERC721, Ownable, IManifold {
     using ScheduleMath for AuctionSchedule;
 
     /// The maximum number of mint passes that may ever be created.
@@ -148,6 +149,9 @@ contract MintPass is ERC721, Ownable {
 
     /// The address permitted to burn mint passes when minting QQL tokens.
     address burner_;
+
+    address payable projectRoyaltyRecipient_;
+    address payable platformRoyaltyRecipient_;
 
     ITokenUriDelegate tokenUriDelegate_;
 
@@ -173,6 +177,9 @@ contract MintPass is ERC721, Ownable {
 
     /// Emitted when the contract owner withdraws the auction proceeds.
     event ProceedsWithdrawal(uint256 amount);
+
+    event ProjectRoyaltyRecipientChanged(address payable recipient);
+    event PlatformRoyaltyRecipientChanged(address payable recipient);
 
     constructor(uint64 _maxCreated) ERC721("", "") {
         maxCreated_ = _maxCreated;
@@ -449,6 +456,49 @@ contract MintPass is ERC721, Ownable {
         returns (bool)
     {
         return _isApprovedOrOwner(operator, tokenId);
+    }
+
+    function getRoyalties(
+        uint256 /*unusedTokenId */
+    )
+        external
+        view
+        returns (address payable[] memory recipients, uint256[] memory bps)
+    {
+        recipients = new address payable[](2);
+        bps = new uint256[](2);
+        recipients[0] = projectRoyaltyRecipient_;
+        recipients[1] = platformRoyaltyRecipient_;
+        bps[0] = 700;
+        bps[1] = 100;
+    }
+
+    function setProjectRoyaltyRecipient(address payable projectRecipient)
+        external
+        onlyOwner
+    {
+        projectRoyaltyRecipient_ = projectRecipient;
+        emit ProjectRoyaltyRecipientChanged(projectRecipient);
+    }
+
+    function projectRoyaltyRecipient() external view returns (address payable) {
+        return projectRoyaltyRecipient_;
+    }
+
+    function setPlatformRoyaltyRecipient(address payable platformRecipient)
+        external
+        onlyOwner
+    {
+        platformRoyaltyRecipient_ = platformRecipient;
+        emit PlatformRoyaltyRecipientChanged(platformRecipient);
+    }
+
+    function platformRoyaltyRecipient()
+        external
+        view
+        returns (address payable)
+    {
+        return platformRoyaltyRecipient_;
     }
 
     function setTokenUriDelegate(ITokenUriDelegate delegate)

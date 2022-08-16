@@ -532,4 +532,26 @@ describe("MintPass", () => {
       );
     });
   });
+
+  it("royalties work as expected", async () => {
+    const [owner, one, two] = await ethers.getSigners();
+    const mp = await MintPass.deploy(9);
+
+    const fail1 = mp.connect(one).setProjectRoyaltyRecipient(one.address);
+    await expect(fail1).to.be.revertedWith("not the owner");
+    const fail2 = mp.connect(one).setPlatformRoyaltyRecipient(two.address);
+    await expect(fail2).to.be.revertedWith("not the owner");
+
+    mp.setProjectRoyaltyRecipient(one.address);
+    mp.setPlatformRoyaltyRecipient(two.address);
+    expect(await mp.projectRoyaltyRecipient()).to.equal(one.address);
+    expect(await mp.platformRoyaltyRecipient()).to.equal(two.address);
+
+    const roys = await mp.getRoyalties(0);
+    expect(roys.recipients).to.deep.equal([one.address, two.address]);
+    expect(roys.bps).to.deep.equal([
+      ethers.BigNumber.from(700),
+      ethers.BigNumber.from(100),
+    ]);
+  });
 });

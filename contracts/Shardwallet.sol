@@ -87,7 +87,7 @@ struct ChildSpec {
 contract Shardwallet is ERC721, Initializable, Ownable {
     using OptionalUints for OptionalUint;
 
-    uint24 internal constant ONE_MILLION = 1000000;
+    uint24 internal constant ONE_MILLION = 1_000_000;
 
     uint64 nextTokenId_;
     mapping(uint64 => ShardData) shardData_;

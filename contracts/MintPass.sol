@@ -5,8 +5,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
-import "./ITokenUriDelegate.sol";
 import "./IManifold.sol";
+import "./ITokenUriDelegate.sol";
 
 /// @dev
 /// Parameters for a piecewise-constant price function with the following

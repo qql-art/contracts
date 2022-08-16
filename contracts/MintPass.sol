@@ -96,19 +96,20 @@ library ScheduleMath {
 }
 
 /// @dev
-/// A record of each buyer's interactions with the auction contract. The
-/// buyer's outstanding rebate can be calculated from this receipt combined
+/// A record of each buyer's interactions with the auction contract.
+/// The buyer's outstanding rebate can be calculated from this receipt combined
 /// with the current (or final) clearing price. Specifically, the clearing
-/// value of the buyer's mint passes is `clearingPrice * purchaseCount`, and so
-/// if `netPaid` is greater than this value then the buyer is entitled to claim
-/// the difference.
+/// value of the buyer's mint passes is `clearingPrice * numPurchased`.
+/// The `netPaid` amount must never be less than the clearing value; if it's
+/// greater than the clearing value, then the buyer is entitled to claim the
+/// difference.
 struct Receipt {
     /// The total amount that the buyer paid for all mint passes that they
     /// purchased, minus the total amount of rebates claimed so far.
     uint192 netPaid;
     /// The total number of mint passes that the buyer purchased. (This does
     /// not count any mint passes created by `reserve`.)
-    uint64 purchaseCount;
+    uint64 numPurchased;
 }
 
 /// @dev These fields are grouped because they change at the same time and can
@@ -298,9 +299,9 @@ contract MintPass is ERC721, Ownable {
             revert("MintPass: too large");
         }
 
-        uint256 newPurchaseCount = receipt.purchaseCount + count;
-        receipt.purchaseCount = uint64(newPurchaseCount);
-        if (receipt.purchaseCount != newPurchaseCount) {
+        uint256 newNumPurchased = receipt.numPurchased + count;
+        receipt.numPurchased = uint64(newNumPurchased);
+        if (receipt.numPurchased != newNumPurchased) {
             // Truncation here would require purchasing 2^64 passes, which
             // would likely cause out-of-gas errors anyway.
             revert("MintPass: too large");
@@ -308,7 +309,7 @@ contract MintPass is ERC721, Ownable {
 
         (bool ok, uint256 priceTotal) = SafeMath.tryMul(
             priceEach,
-            receipt.purchaseCount
+            receipt.numPurchased
         );
         if (!ok || receipt.netPaid < priceTotal) revert("MintPass: underpaid");
 
@@ -347,7 +348,7 @@ contract MintPass is ERC721, Ownable {
         returns (uint256 rebate, Receipt memory receipt)
     {
         receipt = receipts_[buyer];
-        uint256 clearingCost = currentPrice() * receipt.purchaseCount;
+        uint256 clearingCost = currentPrice() * receipt.numPurchased;
         rebate = receipt.netPaid - clearingCost;
         // This truncation should be lossless because `clearingCost` is
         // strictly less than the prior value of `receipt.netPaid`.

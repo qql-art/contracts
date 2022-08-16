@@ -149,20 +149,24 @@ contract MintPass is ERC721, Ownable {
 
     ITokenUriDelegate tokenUriDelegate_;
 
-    /// Emitted whenever mint passes are purchased at auction. The `priceEach`
-    /// field represents the price at the time of purchase, which may be less
-    /// than the amount of Ether deposited with the message call. Mint passes
-    /// created with `reserve` do not cause this event to be emitted.
+    /// Emitted whenever mint passes are purchased at auction. The `payment`
+    /// field represents the amount of Ether deposited with the message call;
+    /// this may be more than the current price of the purchased mint passes,
+    /// adding to the buyer's rebate, or it may be less, consuming some of the
+    /// rebate.
+    ///
+    /// Creating mint passes with `reserve` does not emit this event.
     event MintPassPurchase(
         address indexed buyer,
-        uint256 priceEach,
+        uint256 payment,
         uint256 count
     );
 
     /// Emitted whenever a buyer claims a rebate. This may happen more than
     /// once per buyer, since rebates can be claimed incrementally as the
-    /// auction goes on. The `claimed` amount may be 0 if the price has not
-    /// decreased since the last claim.
+    /// auction goes on. The `claimed` amount may be 0 if there is no new
+    /// rebate to claim, which may happen if the price has not decreased since
+    /// the last claim.
     event RebateClaim(address indexed buyer, uint256 claimed);
 
     /// Emitted when the contract owner withdraws the auction proceeds.
@@ -283,8 +287,6 @@ contract MintPass is ERC721, Ownable {
             // Just a nicer error message.
             revert("MintPass: auction not started");
         }
-        (bool ok, uint256 priceTotal) = SafeMath.tryMul(priceEach, count);
-        if (!ok || msg.value < priceTotal) revert("MintPass: underpaid");
 
         Receipt memory receipt = receipts_[msg.sender];
 
@@ -293,21 +295,26 @@ contract MintPass is ERC721, Ownable {
         if (receipt.netPaid != newNetPaid) {
             // Truncation here would require cumulative payments of 2^192 wei,
             // which seems implausible.
-            revert();
+            revert("MintPass: too large");
         }
 
         uint256 newPurchaseCount = receipt.purchaseCount + count;
         receipt.purchaseCount = uint64(newPurchaseCount);
         if (receipt.purchaseCount != newPurchaseCount) {
             // Truncation here would require purchasing 2^64 passes, which
-            // seems implausible, and would likely cause out-of-gas errors in
-            // the rest of the call anyway.
-            revert();
+            // would likely cause out-of-gas errors anyway.
+            revert("MintPass: too large");
         }
+
+        (bool ok, uint256 priceTotal) = SafeMath.tryMul(
+            priceEach,
+            receipt.purchaseCount
+        );
+        if (!ok || receipt.netPaid < priceTotal) revert("MintPass: underpaid");
 
         receipts_[msg.sender] = receipt;
 
-        emit MintPassPurchase(msg.sender, priceEach, count);
+        emit MintPassPurchase(msg.sender, msg.value, count);
         return
             _createMintPasses({
                 recipient: msg.sender,

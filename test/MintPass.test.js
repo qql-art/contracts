@@ -46,6 +46,11 @@ describe("MintPass", () => {
     await ethers.provider.send("evm_mine", []);
   }
 
+  async function startAuction(mp, schedule) {
+    await setNextTimestamp(schedule.startTimestamp);
+    await mp.updateAuctionSchedule(schedule);
+  }
+
   // Returns how much the Ether balance of the transaction's sender changed due
   // to the call, *not* counting the gas fee. Result is in wei.
   //
@@ -229,6 +234,48 @@ describe("MintPass", () => {
       ).to.be.revertedWith("MintPass: count is zero");
     });
 
+    it("allows atomically applying a rebate to later purchases", async () => {
+      const [owner, alice] = await ethers.getSigners();
+      const mp = await MintPass.deploy(9);
+      const startTimestamp = +(await clock.timestamp()) + 10;
+      const sched = {
+        // Schedule: start at 1000 gwei and drop by 100 gwei/minute.
+        ...basicSchedule(startTimestamp, 1000),
+        dropGwei: 100,
+        c1: 1,
+        n1: 255,
+      };
+      await startAuction(mp, sched);
+
+      // Pay 1000 gwei for 2.
+      expect(await mp.currentPrice()).to.equal(gwei(1000));
+      await mp.connect(alice).purchase(2, { value: gwei(2000) });
+
+      // Wait for the price to decay to 900 gwei, then put in 700 more to buy a
+      // third mint pass. Only works once, since you consume the rebate.
+      await setNextTimestamp(startTimestamp + 60), await mine();
+      expect(await mp.currentPrice()).to.equal(gwei(900));
+      expect(await mp.rebateAmount(alice.address)).to.equal(gwei(200));
+      await mp.connect(alice).purchase(1, { value: gwei(700) });
+      expect(await mp.rebateAmount(alice.address)).to.equal(0);
+      await expect(
+        mp.connect(alice).purchase(1, { value: gwei(700) })
+      ).to.be.revertedWith("MintPass: underpaid");
+
+      // Wait for the price to decay to 500 gwei, at which point there's a 1200
+      // gwei rebate available (400 gwei * 3). Buy one mint pass with no new
+      // Ether transfer, then claim the remaining 700 gwei of rebate.
+      await setNextTimestamp(startTimestamp + 60 * 5), await mine();
+      expect(await mp.currentPrice()).to.equal(gwei(500));
+      expect(await mp.rebateAmount(alice.address)).to.equal(gwei(1200));
+      await mp.connect(alice).purchase(1);
+      expect(await diffEth(mp.connect(alice).claimRebate())).to.equal(
+        gwei(700)
+      );
+
+      expect(await mp.balanceOf(alice.address)).to.equal(4);
+    });
+
     it("properly implements a realistic schedule", async () => {
       const mp = await MintPass.deploy(1);
       const startTimestamp = +(await clock.timestamp()) + 10;
@@ -299,7 +346,7 @@ describe("MintPass", () => {
 
       await expect(
         mp.purchase(ethers.constants.MaxUint256.div(2), { value: 1 })
-      ).to.be.revertedWith("MintPass: underpaid");
+      ).to.be.revertedWith("MintPass: too large");
     });
 
     it("permits updating the schedule before or during the auction", async () => {

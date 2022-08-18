@@ -152,8 +152,8 @@ contract MintPass is ERC721, Ownable, IManifold {
 
     address payable projectRoyaltyRecipient_;
     address payable platformRoyaltyRecipient_;
-    uint256 constant PROJECT_ROYALTY_BPS = 700; // 7%
-    uint256 constant PLATFORM_ROYALTY_BPS = 100; // 1%
+    uint256 constant PROJECT_ROYALTY_BPS = 500; // 5%
+    uint256 constant PLATFORM_ROYALTY_BPS = 200; // 2%
 
     ITokenUriDelegate tokenUriDelegate_;
 

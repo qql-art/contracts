@@ -550,8 +550,8 @@ describe("MintPass", () => {
     const roys = await mp.getRoyalties(0);
     expect(roys.recipients).to.deep.equal([one.address, two.address]);
     expect(roys.bps).to.deep.equal([
-      ethers.BigNumber.from(700),
-      ethers.BigNumber.from(100),
+      ethers.BigNumber.from(500),
+      ethers.BigNumber.from(200),
     ]);
   });
 });

@@ -66,6 +66,8 @@ describe("Shardwallet", () => {
       expect(await sw.getDistributed(erc20.address)).to.equal(0);
 
       // Deposit some ETH and ERC-20s, then claim.
+      expect(await sw.claimableAmount(1, ETH)).to.equal(100);
+      expect(await sw.claimableAmount(1, erc20.address)).to.equal(500);
       const claim1 = sw.claimTo(1, [ETH, erc20.address], bob.address);
       await claim1;
       await expect(claim1).to.emit(sw, "Claim").withArgs(1, ETH, 100);
@@ -76,6 +78,8 @@ describe("Shardwallet", () => {
       expect(await sw.getDistributed(erc20.address)).to.equal(500);
 
       // Claim with no new funds.
+      expect(await sw.claimableAmount(1, ETH)).to.equal(0);
+      expect(await sw.claimableAmount(1, erc20.address)).to.equal(0);
       const claim2 = sw.claimTo(1, [ETH, erc20.address], bob.address);
       await claim2;
       await expect(claim2).to.emit(sw, "Claim").withArgs(1, ETH, 0);
@@ -84,6 +88,8 @@ describe("Shardwallet", () => {
       // Deposit more funds, then claim again.
       await alice.sendTransaction({ to: sw.address, value: 50 });
       await erc20.mint(sw.address, 250);
+      expect(await sw.claimableAmount(1, ETH)).to.equal(50);
+      expect(await sw.claimableAmount(1, erc20.address)).to.equal(250);
       const claim3 = sw.claimTo(1, [ETH, erc20.address], bob.address);
       await claim3;
       await expect(claim3).to.emit(sw, "Claim").withArgs(1, ETH, 50);
@@ -109,6 +115,9 @@ describe("Shardwallet", () => {
       await expect(split)
         .to.emit(sw, "Reforging")
         .withArgs([1], 2, [500000, 300000, 200000]);
+      await expect(sw.claimableAmount(1, ETH)).to.be.revertedWith(
+        "ERC721: invalid token ID"
+      );
 
       expect(await sw.callStatic.computeClaimed(2, ETH)).to.equal(500);
       expect(await sw.callStatic.computeClaimed(3, ETH)).to.equal(300);
@@ -116,6 +125,8 @@ describe("Shardwallet", () => {
 
       // Claim from two of the three new shards.
       await alice.sendTransaction({ to: sw.address, value: 100 });
+      expect(await sw.claimableAmount(2, ETH)).to.equal(50);
+      expect(await sw.claimableAmount(3, ETH)).to.equal(30);
       await expect(sw.claimTo(2, [ETH], bob.address))
         .to.emit(sw, "Claim")
         .withArgs(2, ETH, 50);

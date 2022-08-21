@@ -285,8 +285,10 @@ contract Shardwallet is ERC721, Initializable, Ownable {
             }
         }
 
-        uint256 dust = totalLoss / totalShare; // should be exact
-        assert(dust * totalShare == totalLoss);
+        uint256 dust = totalLoss / totalShare;
+        // Dust should be exact; just in case it's not (due to a bug),
+        // pay out anyway so that we can at least recover funds.
+        // assert(dust * totalShare == totalLoss);
         if (numOutranking < dust) result++;
         return result;
     }

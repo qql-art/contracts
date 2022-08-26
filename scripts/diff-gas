@@ -55,7 +55,7 @@ main() {
             "\($bold)\(if .delta > 0 then "+" else "" end)\(.delta)\($sgr0)",
             " (",
             if .after < .before then "/" else "\u00d7" end,
-            "\(.after / .before | if . < 1 then 1/. else . end | .*100 | round | ./100)",
+            "\(.after / .before | if . < 1 then 1/. else . end | .*1000 | round | ./1000)",
             ")",
             " (\(.before) -> \(.after))"
         ])

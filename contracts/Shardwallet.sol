@@ -164,7 +164,7 @@ contract Shardwallet is ERC721, Initializable, Ownable {
         parents_[firstChildId] = parents;
 
         uint24 totalShareMicros = 0;
-        for (uint256 i = 0; i < parents.length; i++) {
+        for (uint256 i = 0; i < parents.length; ++i) {
             uint256 parent = parents[i];
             if (!_isApprovedOrOwner(msg.sender, parent)) {
                 revert("Shardwallet: unauthorized");
@@ -175,7 +175,7 @@ contract Shardwallet is ERC721, Initializable, Ownable {
 
         uint24[] memory childrenSharesMicros = new uint24[](children.length);
         uint256 nextTokenId = firstChildId;
-        for (uint256 i = 0; i < children.length; i++) {
+        for (uint256 i = 0; i < children.length; ++i) {
             uint24 micros = children[i].shareMicros;
             if (micros == 0) {
                 revert("Shardwallet: null share");
@@ -185,12 +185,12 @@ contract Shardwallet is ERC721, Initializable, Ownable {
             }
             totalShareMicros -= micros;
             childrenSharesMicros[i] = micros;
-            uint256 child = nextTokenId++;
-            shardData_[child] = ShardData({
+            shardData_[nextTokenId] = ShardData({
                 shareMicros: micros,
                 firstSibling: firstChildId,
                 numSiblings: uint232(children.length) // lossless; checked above
             });
+            ++nextTokenId;
         }
         if (totalShareMicros != 0) {
             revert("Shardwallet: share too small");
@@ -203,8 +203,9 @@ contract Shardwallet is ERC721, Initializable, Ownable {
         });
 
         nextTokenId = firstChildId;
-        for (uint256 i = 0; i < children.length; i++) {
-            _safeMint(children[i].recipient, nextTokenId++);
+        for (uint256 i = 0; i < children.length; ++i) {
+            _safeMint(children[i].recipient, nextTokenId);
+            ++nextTokenId;
         }
 
         return firstChildId;
@@ -236,7 +237,7 @@ contract Shardwallet is ERC721, Initializable, Ownable {
         returns (uint256 child, uint24 shareMicros)
     {
         uint256 shareMicros256 = 0;
-        for (uint256 i = 0; i < parents.length; i++) {
+        for (uint256 i = 0; i < parents.length; ++i) {
             shareMicros256 += shardData_[parents[i]].shareMicros;
         }
         shareMicros = uint24(shareMicros256);
@@ -261,7 +262,7 @@ contract Shardwallet is ERC721, Initializable, Ownable {
     ) internal pure returns (uint256) {
         uint256 n = shareMicros.length;
         uint256 totalShare = 0;
-        for (uint256 i = 0; i < shareMicros.length; i++) {
+        for (uint256 i = 0; i < shareMicros.length; ++i) {
             totalShare += shareMicros[i];
         }
 
@@ -272,7 +273,7 @@ contract Shardwallet is ERC721, Initializable, Ownable {
 
         uint256 totalLoss = mainLoss;
         uint256 numOutranking = 0;
-        for (uint256 i = 0; i < n; i++) {
+        for (uint256 i = 0; i < n; ++i) {
             if (i == childIndex) continue;
             uint256 thisClaimMicros = amount * shareMicros[i];
             uint256 thisClaim = thisClaimMicros / totalShare;
@@ -281,7 +282,7 @@ contract Shardwallet is ERC721, Initializable, Ownable {
             if (
                 thisLoss > mainLoss || (thisLoss == mainLoss && i > childIndex)
             ) {
-                numOutranking++;
+                ++numOutranking;
             }
         }
 
@@ -289,7 +290,7 @@ contract Shardwallet is ERC721, Initializable, Ownable {
         // Dust should be exact; just in case it's not (due to a bug),
         // pay out anyway so that we can at least recover funds.
         // assert(dust * totalShare == totalLoss);
-        if (numOutranking < dust) result++;
+        if (numOutranking < dust) ++result;
         return result;
     }
 
@@ -333,7 +334,7 @@ contract Shardwallet is ERC721, Initializable, Ownable {
 
         uint256[] memory parents = parents_[data.firstSibling];
         uint256 parentsClaimed = 0;
-        for (uint256 i = 0; i < parents.length; i++) {
+        for (uint256 i = 0; i < parents.length; ++i) {
             // Note: potential optimization here if the parent was burned
             // before we first distributed this currency, in which case we can
             // prune the whole tree. But that requires storing more state, so
@@ -345,7 +346,7 @@ contract Shardwallet is ERC721, Initializable, Ownable {
             );
         }
         uint24[] memory siblingSharesMicros = new uint24[](data.numSiblings);
-        for (uint256 i = 0; i < data.numSiblings; i++) {
+        for (uint256 i = 0; i < data.numSiblings; ++i) {
             uint24 shareMicros;
             uint256 sibling = data.firstSibling + i;
             if (sibling == shardId) {
@@ -477,7 +478,7 @@ contract Shardwallet is ERC721, Initializable, Ownable {
         IERC20[] calldata currencies,
         address payable recipient
     ) public {
-        for (uint256 i = 0; i < currencies.length; i++) {
+        for (uint256 i = 0; i < currencies.length; ++i) {
             _claimSingleCurrencyTo(tokenId, currencies[i], recipient);
         }
     }
@@ -514,7 +515,7 @@ contract Shardwallet is ERC721, Initializable, Ownable {
     {
         uint256[] memory parents = parents_[shardData_[shardId].firstSibling];
         uint256[] memory result = new uint256[](parents.length);
-        for (uint256 i = 0; i < result.length; i++) {
+        for (uint256 i = 0; i < result.length; ++i) {
             result[i] = parents[i];
         }
         return result;

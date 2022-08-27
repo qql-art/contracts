@@ -328,9 +328,11 @@ contract Shardwallet is ERC721, Initializable, Ownable {
             return 0;
         }
 
-        uint256 childIndex = shardId - data.firstSibling;
+        uint256 firstSibling = data.firstSibling;
+        uint256 numSiblings = data.numSiblings;
+        uint256 childIndex = shardId - firstSibling;
 
-        uint256[] memory parents = parents_[data.firstSibling];
+        uint256[] memory parents = parents_[firstSibling];
         uint256 parentsClaimed = 0;
         for (uint256 i = 0; i < parents.length; ++i) {
             // Note: potential optimization here if the parent was burned
@@ -343,10 +345,10 @@ contract Shardwallet is ERC721, Initializable, Ownable {
                 store
             );
         }
-        uint24[] memory siblingSharesMicros = new uint24[](data.numSiblings);
-        for (uint256 i = 0; i < data.numSiblings; ++i) {
+        uint24[] memory siblingSharesMicros = new uint24[](numSiblings);
+        for (uint256 i = 0; i < numSiblings; ++i) {
             uint24 shareMicros;
-            uint256 sibling = data.firstSibling + i;
+            uint256 sibling = firstSibling + i;
             if (sibling == shardId) {
                 shareMicros = data.shareMicros;
             } else {

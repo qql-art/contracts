@@ -328,9 +328,7 @@ contract Shardwallet is ERC721, Initializable, Ownable {
             return 0;
         }
 
-        assert(shardId >= data.firstSibling);
         uint256 childIndex = shardId - data.firstSibling;
-        assert(childIndex < data.numSiblings);
 
         uint256[] memory parents = parents_[data.firstSibling];
         uint256 parentsClaimed = 0;

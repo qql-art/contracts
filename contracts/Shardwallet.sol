@@ -262,7 +262,7 @@ contract Shardwallet is ERC721, Initializable, Ownable {
     ) internal pure returns (uint256) {
         uint256 n = shareMicros.length;
         uint256 totalShare = 0;
-        for (uint256 i = 0; i < shareMicros.length; ++i) {
+        for (uint256 i = 0; i < n; ++i) {
             totalShare += shareMicros[i];
         }
 

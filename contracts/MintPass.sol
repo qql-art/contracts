@@ -261,7 +261,7 @@ contract MintPass is ERC721, Ownable, IManifold {
         if (newCreated > maxCreated_) revert("MintPass: minted out");
 
         // Lossless since `newCreated <= maxCreated_ <= type(uint64).max`.
-        stats.created = _losslessSum(stats.current, count);
+        stats.created = _losslessSum(stats.created, count);
         // Lossless since `current <= created <= type(uint64).max`.
         stats.current = _losslessSum(stats.current, count);
         if (isPurchase) {

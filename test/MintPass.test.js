@@ -384,6 +384,27 @@ describe("MintPass", () => {
       expect(await mp.currentPrice()).to.equal(gwei(500));
     });
 
+    it("permits passes to be burned before the auction is finished", async () => {
+      const [owner, alice, burner] = await ethers.getSigners();
+      const mp = await MintPass.deploy(12);
+      await mp.setBurner(burner.address);
+
+      const startTimestamp = +(await clock.timestamp()) + 10;
+      await setNextTimestamp(startTimestamp);
+      await mp.updateAuctionSchedule(basicSchedule(startTimestamp, 1000));
+
+      await mp.connect(owner).reserve(owner.address, 3);
+      await mp.connect(alice).purchase(3, { value: gwei(3000) });
+      await mp.connect(burner).burn(1);
+      await mp.connect(burner).burn(4);
+      await mp.connect(owner).reserve(owner.address, 3);
+      await mp.connect(alice).purchase(3, { value: gwei(3000) });
+
+      expect(await mp.totalSupply()).to.equal(10);
+      expect(await mp.totalCreated()).to.equal(12);
+      expect(await mp.endTimestamp()).not.to.equal(0);
+    });
+
     it("prevents updating the schedule if the price would increase", async () => {
       const mp = await MintPass.deploy(1);
       const startTimestamp = +(await clock.timestamp());

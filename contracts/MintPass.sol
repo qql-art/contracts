@@ -270,7 +270,7 @@ contract MintPass is ERC721, Ownable, IManifold {
         }
 
         supplyStats_ = stats;
-        if (stats.created == maxCreated_) endTimestamp_ = block.timestamp;
+        if (newCreated == maxCreated_) endTimestamp_ = block.timestamp;
 
         uint256 firstTokenId = oldCreated + 1;
         uint256 nextTokenId = firstTokenId;

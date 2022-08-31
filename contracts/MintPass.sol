@@ -261,12 +261,12 @@ contract MintPass is ERC721, Ownable, IManifold {
         if (newCreated > maxCreated_) revert("MintPass: minted out");
 
         // Lossless since `newCreated <= maxCreated_ <= type(uint64).max`.
-        stats.created = _losslessSum(stats.created, count);
+        stats.created = _losslessU64(newCreated);
         // Lossless since `current <= created <= type(uint64).max`.
-        stats.current = _losslessSum(stats.current, count);
+        stats.current = _losslessU64(stats.current + count);
         if (isPurchase) {
             // Lossless since `purchased <= created <= type(uint64).max`.
-            stats.purchased = _losslessSum(stats.purchased, count);
+            stats.purchased = _losslessU64(stats.purchased + count);
         }
 
         supplyStats_ = stats;
@@ -281,10 +281,9 @@ contract MintPass is ERC721, Ownable, IManifold {
     }
 
     /// @dev Helper for `_createMintPasses`.
-    function _losslessSum(uint64 a, uint256 b) internal pure returns (uint64) {
-        uint256 sum = a + b;
-        uint64 result = uint64(sum);
-        assert(result == sum);
+    function _losslessU64(uint256 x) internal pure returns (uint64 result) {
+        result = uint64(x);
+        assert(result == x);
         return result;
     }
 

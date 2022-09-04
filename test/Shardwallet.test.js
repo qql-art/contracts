@@ -5,22 +5,27 @@ describe("Shardwallet", () => {
   let Shardwallet;
   let ShardwalletFactory;
   let TestERC20;
+  let TestSplitClaim;
   let TestTokenUriDelegate;
 
   let swf;
+  let testSplitClaim;
 
   const ETH = ethers.constants.AddressZero;
+  const WeiPerEther = ethers.constants.WeiPerEther;
 
   before(async () => {
     Nonpayable = await ethers.getContractFactory("Nonpayable");
     Shardwallet = await ethers.getContractFactory("Shardwallet");
     ShardwalletFactory = await ethers.getContractFactory("ShardwalletFactory");
     TestERC20 = await ethers.getContractFactory("TestERC20");
+    TestSplitClaim = await ethers.getContractFactory("TestSplitClaim");
     TestTokenUriDelegate = await ethers.getContractFactory(
       "TestTokenUriDelegate"
     );
 
     swf = await ShardwalletFactory.deploy();
+    testSplitClaim = await TestSplitClaim.deploy();
   });
 
   async function summon() {
@@ -433,6 +438,104 @@ describe("Shardwallet", () => {
         sw.connect(bob).callStatic.claim(1, [ETH])
       ).to.be.revertedWith("Shardwallet: unauthorized");
     });
+  });
+
+  describe("splitClaim", () => {
+    async function expectSplitClaim(amount, shareMicros, expected) {
+      const actual = await testSplitClaim.splitClaimBatch(amount, shareMicros);
+      function normalize(xs) {
+        return xs.map((x) => String(ethers.BigNumber.from(x)));
+      }
+      expect(normalize(actual)).to.deep.equal(normalize(expected));
+    }
+
+    const cases = [
+      {
+        name: "basic two-way split, 50%/50%",
+        amount: 10,
+        shareMicros: [50e4, 50e4],
+        expected: [5, 5],
+      },
+      {
+        name: "two-way split with dust",
+        amount: 9,
+        shareMicros: [50e4, 50e4],
+        expected: [4, 5],
+      },
+      {
+        name: "10%/20% split (sub-100% parent)",
+        amount: 10,
+        shareMicros: [10e4, 20e4],
+        expected: [3, 7],
+      },
+      {
+        name: "three-way split with no dust, 10%/10%/5% (sub-100% parent)",
+        amount: 10,
+        shareMicros: [10e4, 10e4, 5e4],
+        expected: [4, 4, 2],
+      },
+      {
+        name: "three-way split with dust, 50%/25%/25%",
+        amount: 10,
+        shareMicros: [50e4, 25e4, 25e4],
+        expected: [5, 2, 3],
+      },
+      {
+        name: "three-way split with no dust, 12 wei into 7%/7%/7%",
+        amount: 12,
+        shareMicros: [7e4, 7e4, 7e4],
+        expected: [4, 4, 4],
+      },
+      {
+        name: "five-way split with multiple dust recipients",
+        amount: 10,
+        shareMicros: [40e4, 15e4, 15e4, 15e4, 15e4],
+        expected: [4, 1, 1, 2, 2],
+      },
+      {
+        name: "six-way split with multiple dust recipients",
+        amount: 10,
+        shareMicros: [20e4, 15e4, 15e4, 15e4, 15e4, 20e4],
+        expected: [2, 1, 1, 2, 2, 2],
+      },
+      {
+        name: "basic four-way split with even division",
+        amount: 10,
+        shareMicros: [20e4, 30e4, 30e4, 20e4],
+        expected: [2, 3, 3, 2],
+      },
+      {
+        name: "64%/22%/14% split with dust to the 14% shard",
+        amount: 10,
+        shareMicros: [64e4, 22e4, 14e4],
+        expected: [6, 2, 2],
+      },
+      {
+        name: "64%/23%/13% split with dust to the 64% shard",
+        amount: 10,
+        shareMicros: [64e4, 23e4, 13e4],
+        expected: [7, 2, 1],
+      },
+      {
+        name: "1B ETH (10**27 wei) into a 10%/10% split",
+        amount: WeiPerEther.mul(1e9),
+        shareMicros: [10e4, 10e4],
+        expected: [WeiPerEther.mul(0.5e9), WeiPerEther.mul(0.5e9)],
+      },
+      {
+        name: "1B ETH (10**27 wei) into a 1micro/1micro split",
+        amount: WeiPerEther.mul(1e9),
+        shareMicros: [1, 1],
+        expected: [WeiPerEther.mul(0.5e9), WeiPerEther.mul(0.5e9)],
+      },
+      //...
+    ];
+
+    for (const { name, amount, shareMicros, expected } of cases) {
+      it(name, async () => {
+        await expectSplitClaim(amount, shareMicros, expected);
+      });
+    }
   });
 
   describe("edge cases", () => {

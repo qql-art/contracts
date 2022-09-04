@@ -305,14 +305,10 @@ contract Shardwallet is ERC721, Initializable, Ownable {
     /// shard may run out of gas or overflow the stack. Instead, any caller can
     /// split this computation into multiple calls or transactions, by first
     /// computing the claim for some ancestor.
-    ///
-    /// If `store` is false, then no results (intermediate or final) will be
-    /// written to storage, so this may be called from a `staticcall` context.
-    function computeClaimedAndMaybeStore(
-        uint256 shardId,
-        IERC20 currency,
-        bool store
-    ) public returns (uint256) {
+    function computeClaimed(uint256 shardId, IERC20 currency)
+        public
+        returns (uint256)
+    {
         {
             OptionalUint cr = claimRecord_[currency][shardId];
             if (cr.isPresent()) return cr.decode();
@@ -339,11 +335,7 @@ contract Shardwallet is ERC721, Initializable, Ownable {
             // before we first distributed this currency, in which case we can
             // prune the whole tree. But that requires storing more state, so
             // not obvious under which conditions it's a win.
-            parentsClaimed += computeClaimedAndMaybeStore(
-                parents[i],
-                currency,
-                store
-            );
+            parentsClaimed += computeClaimed(parents[i], currency);
         }
         uint24[] memory siblingSharesMicros = new uint24[](numSiblings);
         for (uint256 i = 0; i < numSiblings; ++i) {
@@ -361,42 +353,19 @@ contract Shardwallet is ERC721, Initializable, Ownable {
             siblingSharesMicros,
             childIndex
         );
-        if (store)
-            claimRecord_[currency][shardId] = OptionalUints.encode(claimed);
+        claimRecord_[currency][shardId] = OptionalUints.encode(claimed);
         return claimed;
     }
 
-    /// Like `computeClaimedAndMaybeStore` with `store: true`. See docs there.
-    function computeClaimed(uint256 shardId, IERC20 currency)
-        public
-        returns (uint256)
-    {
-        return computeClaimedAndMaybeStore(shardId, currency, true);
-    }
-
-    function _computeClaimedView(uint256 shardId, IERC20 currency)
-        internal
-        view
-        returns (uint256)
-    {
-        bytes memory call = abi.encodeWithSignature(
-            "computeClaimedAndMaybeStore(uint256,address,bool)",
-            shardId,
-            currency,
-            false
-        );
-        (bool ok, bytes memory callResult) = address(this).staticcall(call);
-        if (!ok) revert("Shardwallet: failed");
-        uint256 amount = abi.decode(callResult, (uint256));
-        return amount;
-    }
-
-    function _computeClaimDetails(
-        uint256 shardId,
+    function _claimSingleCurrencyTo(
+        uint256 tokenId,
         IERC20 currency,
-        uint256 priorClaim
-    ) internal view returns (uint256 amount, uint256 distributed) {
-        uint24 shareMicros = shardData_[shardId].shareMicros;
+        address payable recipient
+    ) internal returns (uint256) {
+        if (!_isApprovedOrOwner(msg.sender, tokenId)) {
+            revert("Shardwallet: unauthorized");
+        }
+        uint24 shareMicros = shardData_[tokenId].shareMicros;
 
         uint256 balance;
         if (address(currency) == address(0)) {
@@ -404,11 +373,12 @@ contract Shardwallet is ERC721, Initializable, Ownable {
         } else {
             balance = currency.balanceOf(address(this));
         }
-        distributed = distributed_[currency];
+        uint256 distributed = distributed_[currency];
         uint256 received = balance + distributed;
 
         uint256 entitlement = (received * shareMicros) / ONE_MILLION;
-        amount = 0;
+        uint256 priorClaim = computeClaimed(tokenId, currency);
+        uint256 amount = 0;
         // `priorClaim` can exceed `entitlement` by up to 1 unit in the
         // aftermath of a split that cannot be wholly divided. (E.g., consider
         // a shard that claims 1 unit of currency and then splits.)
@@ -422,39 +392,6 @@ contract Shardwallet is ERC721, Initializable, Ownable {
             // can.
             if (amount > balance) amount = balance;
         }
-    }
-
-    /// Returns the amount of currency that the given shard would receive as a
-    /// result of calling `claim`. The shard must be active.
-    function claimableAmount(uint256 tokenId, IERC20 currency)
-        external
-        view
-        returns (uint256)
-    {
-        if (!_exists(tokenId)) revert("ERC721: invalid token ID");
-        uint256 priorClaim = _computeClaimedView(tokenId, currency);
-        (uint256 amount, ) = _computeClaimDetails(
-            tokenId,
-            currency,
-            priorClaim
-        );
-        return amount;
-    }
-
-    function _claimSingleCurrencyTo(
-        uint256 tokenId,
-        IERC20 currency,
-        address payable recipient
-    ) internal returns (uint256) {
-        if (!_isApprovedOrOwner(msg.sender, tokenId)) {
-            revert("Shardwallet: unauthorized");
-        }
-        uint256 priorClaim = computeClaimed(tokenId, currency);
-        (uint256 amount, uint256 distributed) = _computeClaimDetails(
-            tokenId,
-            currency,
-            priorClaim
-        );
         emit Claim({tokenId: tokenId, currency: currency, amount: amount});
         if (amount == 0) return 0;
 

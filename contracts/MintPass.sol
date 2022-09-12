@@ -2,7 +2,7 @@
 pragma solidity ^0.8.8;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 import "./IManifold.sol";
@@ -125,11 +125,9 @@ struct SupplyStats {
     /// differs from `created_` in that it does not count mint passes created
     /// for free via `reserve`.
     uint64 purchased;
-    /// The current number of mint passes (i.e., valid ERC-721 tokens).
-    uint64 current;
 }
 
-contract MintPass is ERC721, Ownable, IManifold {
+contract MintPass is ERC721Enumerable, Ownable, IManifold {
     using ScheduleMath for AuctionSchedule;
 
     /// The maximum number of mint passes that may ever be created.
@@ -195,14 +193,6 @@ contract MintPass is ERC721, Ownable, IManifold {
         return "QQL:MintPass";
     }
 
-    /// Returns the current number of active mint passes.
-    ///
-    /// @dev Conforms to EIP-721's `ERC721Enumerable`, though we don't
-    /// implement the rest of the functions in that extension.
-    function totalSupply() external view returns (uint256) {
-        return supplyStats_.current;
-    }
-
     /// Returns the total number of mint passes ever created.
     function totalCreated() external view returns (uint256) {
         return supplyStats_.created;
@@ -262,8 +252,6 @@ contract MintPass is ERC721, Ownable, IManifold {
 
         // Lossless since `newCreated <= maxCreated_ <= type(uint64).max`.
         stats.created = _losslessU64(newCreated);
-        // Lossless since `current <= created <= type(uint64).max`.
-        stats.current = _losslessU64(stats.current + count);
         if (isPurchase) {
             // Lossless since `purchased <= created <= type(uint64).max`.
             stats.purchased = _losslessU64(stats.purchased + count);
@@ -441,7 +429,6 @@ contract MintPass is ERC721, Ownable, IManifold {
     /// Burns a mint pass. Intended to be called when minting a QQL token.
     function burn(uint256 tokenId) external {
         if (msg.sender != burner_) revert("MintPass: unauthorized");
-        supplyStats_.current--;
         _burn(tokenId);
     }
 

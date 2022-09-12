@@ -4,7 +4,7 @@ pragma solidity ^0.8.8;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 
 import "./ITokenUriDelegate.sol";
 
@@ -73,7 +73,7 @@ struct ChildSpec {
 /// a shard that must be active, or `shardId` to refer to any shard. Any
 /// parameter of type `IERC20` may be `address(0)` to denote ETH or a non-zero
 /// address to denote an ERC-20 token.
-contract Shardwallet is ERC721, Initializable, Ownable {
+contract Shardwallet is ERC721Enumerable, Initializable, Ownable {
     using OptionalUints for OptionalUint;
 
     uint24 internal constant ONE_MILLION = 1_000_000;

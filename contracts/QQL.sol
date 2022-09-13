@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 
+import "./IOperatorFilter.sol";
 import "./ITokenUriDelegate.sol";
 import "./MintPass.sol";
 
@@ -21,6 +22,7 @@ contract QQL is ERC721Enumerable, Ownable {
     uint256 immutable unlockTimestamp_;
     uint256 immutable maxPremintPassId_;
 
+    IOperatorFilter operatorFilter_;
     ITokenUriDelegate tokenUriDelegate_;
 
     event TokenRoyaltyRecipientChange(
@@ -161,5 +163,33 @@ contract QQL is ERC721Enumerable, Ownable {
         ITokenUriDelegate delegate = tokenUriDelegate_;
         if (address(delegate) == address(0)) return "";
         return delegate.tokenURI(tokenId);
+    }
+
+    function setOperatorFilter(IOperatorFilter filter) external onlyOwner {
+        operatorFilter_ = filter;
+    }
+
+    function operatorFilter() external view returns (IOperatorFilter) {
+        return operatorFilter_;
+    }
+
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 tokenId
+    ) internal virtual override {
+        if (!_mayTransfer(msg.sender, tokenId)) revert("QQL: illegal operator");
+        super._beforeTokenTransfer(from, to, tokenId);
+    }
+
+    function _mayTransfer(address operator, uint256 tokenId)
+        internal
+        view
+        returns (bool)
+    {
+        IOperatorFilter filter = operatorFilter_;
+        if (address(filter) == address(0)) return true;
+        if (operator == ownerOf(tokenId)) return true;
+        return filter.mayTransfer(msg.sender);
     }
 }

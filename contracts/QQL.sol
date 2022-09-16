@@ -117,11 +117,26 @@ contract QQL is
         return false;
     }
 
+    function mintTo(uint256 mintPassId, bytes32 hash)
+        external
+        returns (uint256)
+    {
+        return _mint(mintPassId, hash, address(bytes20(hash)));
+    }
+
     function mint(uint256 mintPassId, bytes32 hash) external returns (uint256) {
-        if (!pass_.isApprovedOrOwner(msg.sender, mintPassId))
-            revert("QQL: not pass owner or approved");
         if (!_consumeMintApproval(msg.sender, hash))
             revert("QQL: minter does not match hash");
+        return _mint(mintPassId, hash, msg.sender);
+    }
+
+    function _mint(
+        uint256 mintPassId,
+        bytes32 hash,
+        address recipient
+    ) internal returns (uint256) {
+        if (!pass_.isApprovedOrOwner(msg.sender, mintPassId))
+            revert("QQL: not pass owner or approved");
         if (tokenHashToId_[hash] != 0) revert("QQL: hash already used");
         if (
             block.timestamp < unlockTimestamp_ && mintPassId > maxPremintPassId_
@@ -134,7 +149,7 @@ contract QQL is
         // distinct from the minter (`msg.sender`).
         tokenRoyaltyRecipient_[tokenId] = payable(address(bytes20(hash)));
         pass_.burn(mintPassId);
-        _safeMint(msg.sender, tokenId);
+        _safeMint(recipient, tokenId);
         return tokenId;
     }
 

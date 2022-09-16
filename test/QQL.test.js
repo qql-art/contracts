@@ -56,6 +56,9 @@ describe("QQL", () => {
       await expect(qql.connect(passHolder).mint(1, hash)).to.be.revertedWith(
         "nonexistent token"
       );
+      await expect(qql.connect(passHolder).mintTo(1, hash)).to.be.revertedWith(
+        "nonexistent token"
+      );
     });
 
     it("can only mint before unlock timestamp if it is a premint pass", async () => {
@@ -71,6 +74,9 @@ describe("QQL", () => {
       expect(qql.connect(passHolder).mint(3, hash1)).to.be.revertedWith(
         "not yet unlocked"
       );
+      expect(qql.connect(passHolder).mintTo(3, hash1)).to.be.revertedWith(
+        "not yet unlocked"
+      );
       await qql.connect(passHolder).mint(2, hash1);
       const hash2 = generateHash(passHolder.address, 2);
       await setNextTimestamp(unlockTimestamp);
@@ -81,9 +87,11 @@ describe("QQL", () => {
     it("only owner or approved can mint", async () => {
       const { passHolder, mintPass, qql, signers, hash } = await setup();
       const operator = signers[2];
-      const fail = qql
+      let fail = qql
         .connect(operator)
         .mint(1, generateHash(operator.address, 0));
+      await expect(fail).to.be.revertedWith("owner or approved");
+      fail = qql.connect(operator).mintTo(1, generateHash(operator.address, 0));
       await expect(fail).to.be.revertedWith("owner or approved");
       await mintPass.connect(passHolder).approve(operator.address, 1);
       await qql.connect(operator).mint(1, generateHash(operator.address, 1));
@@ -182,6 +190,20 @@ describe("QQL", () => {
       await qql.connect(passHolder).mint(1, hash);
       const fail = qql.connect(passHolder).mint(2, hash);
       await expect(fail).to.be.revertedWith("hash already used");
+    });
+
+    it("can mint to an artist (leaving the artist with the QQL)", async () => {
+      const { passHolder, mintPass, qql, signers } = await setup();
+      const artist = signers[2];
+      if (artist.address === passHolder.address)
+        throw new Error("fix test setup");
+      const hash = generateHash(artist.address, 0);
+      const mint = qql.connect(passHolder).mintTo(1, hash);
+      await expect(mint)
+        .to.emit(qql, "Transfer")
+        .withArgs(ethers.constants.AddressZero, artist.address, 1);
+      expect(await qql.ownerOf(1)).to.equal(artist.address);
+      expect(await qql.tokenRoyaltyRecipient(1)).to.equal(artist.address);
     });
   });
 

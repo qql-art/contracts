@@ -78,29 +78,29 @@ TEST_CASES.push(async function* shardwalletBasics(props) {
 
   yield [
     "Shardwallet: ETH claim initializing 3 records",
-    await sw.claim(6, [ETH]).then((tx) => tx.wait()),
+    await sw.claim(6, [ETH], 1e6).then((tx) => tx.wait()),
   ];
   yield [
     "Shardwallet: ERC-20 claim initializing 3 records",
-    await sw.claim(6, [weth9.address]).then((tx) => tx.wait()),
+    await sw.claim(6, [weth9.address], 1e6).then((tx) => tx.wait()),
   ];
 
   yield [
     "Shardwallet: ETH claim initializing 1 record",
-    await sw.claim(2, [ETH]).then((tx) => tx.wait()),
+    await sw.claim(2, [ETH], 1e6).then((tx) => tx.wait()),
   ];
   yield [
     "Shardwallet: ERC-20 claim initializing 1 record",
-    await sw.claim(2, [weth9.address]).then((tx) => tx.wait()),
+    await sw.claim(2, [weth9.address], 1e6).then((tx) => tx.wait()),
   ];
 
   yield [
     "Shardwallet: no-op ETH claim",
-    await sw.claim(2, [ETH]).then((tx) => tx.wait()),
+    await sw.claim(2, [ETH], 1e6).then((tx) => tx.wait()),
   ];
   yield [
     "Shardwallet: no-op ERC-20 claim",
-    await sw.claim(2, [weth9.address]).then((tx) => tx.wait()),
+    await sw.claim(2, [weth9.address], 1e6).then((tx) => tx.wait()),
   ];
 
   await alice.sendTransaction({ to: sw.address, value: oneMillion });
@@ -108,15 +108,15 @@ TEST_CASES.push(async function* shardwalletBasics(props) {
 
   yield [
     "Shardwallet: ETH claim updating 1 existing record (typical claim)",
-    await sw.claim(2, [ETH]).then((tx) => tx.wait()),
+    await sw.claim(2, [ETH], 1e6).then((tx) => tx.wait()),
   ];
   yield [
     "Shardwallet: ERC-20 claim updating 1 existing record (typical claim)",
-    await sw.claim(2, [weth9.address]).then((tx) => tx.wait()),
+    await sw.claim(2, [weth9.address], 1e6).then((tx) => tx.wait()),
   ];
   yield [
     "Shardwallet: combined ETH/ERC-20 claim updating 1 existing record per currency (typical claim)",
-    await sw.claim(6, [ETH, weth9.address]).then((tx) => tx.wait()),
+    await sw.claim(6, [ETH, weth9.address], 1e6).then((tx) => tx.wait()),
   ];
 
   yield [
@@ -143,7 +143,7 @@ TEST_CASES.push(async function* shardwalletManyChildren(props) {
 
   let shard = 1;
   await alice.sendTransaction({ to: sw.address, value: oneMillion + 1 });
-  await sw.claim(shard, [ETH]);
+  await sw.claim(shard, [ETH], 1e6);
 
   const siblingCounts = [4, 20, 100];
   for (let i = 0; i < siblingCounts.length; i++) {
@@ -155,7 +155,7 @@ TEST_CASES.push(async function* shardwalletManyChildren(props) {
     await alice.sendTransaction({ to: sw.address, value: oneMillion + 1 });
     yield [
       `Shardwallet: initial claim with ${lastSiblings} parents`,
-      await sw.claim(shard, [ETH]).then((tx) => tx.wait()),
+      await sw.claim(shard, [ETH], 1e6).then((tx) => tx.wait()),
     ];
 
     await sw.split(
@@ -167,7 +167,7 @@ TEST_CASES.push(async function* shardwalletManyChildren(props) {
     );
     yield [
       `Shardwallet: initial claim with ${siblings} siblings`,
-      await sw.claim(shard + 1, [ETH]).then((tx) => tx.wait()),
+      await sw.claim(shard + 1, [ETH], 1e6).then((tx) => tx.wait()),
     ];
 
     await sw.merge(
@@ -215,7 +215,7 @@ TEST_CASES.push(async function* shardwalletLongChains(props) {
 
   yield [
     "Shardwallet: first claim over long chain",
-    await sw.claim(shard, [weth9.address]).then((tx) => tx.wait()),
+    await sw.claim(shard, [weth9.address], 1e6).then((tx) => tx.wait()),
   ];
 });
 

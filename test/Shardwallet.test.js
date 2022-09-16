@@ -45,7 +45,7 @@ describe("Shardwallet", () => {
   }
 
   async function expectClaimableAmounts(sw, shardId, currencies, expected) {
-    const actual = await sw.callStatic.claim(shardId, currencies);
+    const actual = await sw.callStatic.claim(shardId, currencies, 1e6);
     expect(actual).to.deep.equal(expected.map((x) => ethers.BigNumber.from(x)));
   }
 
@@ -75,7 +75,7 @@ describe("Shardwallet", () => {
 
       // Deposit some ETH and ERC-20s, then claim.
       await expectClaimableAmounts(sw, 1, [ETH, erc20.address], [100, 500]);
-      const claim1 = sw.claimTo(1, [ETH, erc20.address], bob.address);
+      const claim1 = sw.claimTo(1, [ETH, erc20.address], bob.address, 1e6);
       await claim1;
       await expect(claim1).to.emit(sw, "Claim").withArgs(1, ETH, 100);
       await expect(claim1).to.emit(sw, "Claim").withArgs(1, erc20.address, 500);
@@ -86,7 +86,7 @@ describe("Shardwallet", () => {
 
       // Claim with no new funds.
       await expectClaimableAmounts(sw, 1, [ETH, erc20.address], [0, 0]);
-      const claim2 = sw.claimTo(1, [ETH, erc20.address], bob.address);
+      const claim2 = sw.claimTo(1, [ETH, erc20.address], bob.address, 1e6);
       await claim2;
       await expect(claim2).to.emit(sw, "Claim").withArgs(1, ETH, 0);
       await expect(claim2).to.emit(sw, "Claim").withArgs(1, erc20.address, 0);
@@ -95,7 +95,7 @@ describe("Shardwallet", () => {
       await alice.sendTransaction({ to: sw.address, value: 50 });
       await erc20.mint(sw.address, 250);
       await expectClaimableAmounts(sw, 1, [ETH, erc20.address], [50, 250]);
-      const claim3 = sw.claimTo(1, [ETH, erc20.address], bob.address);
+      const claim3 = sw.claimTo(1, [ETH, erc20.address], bob.address, 1e6);
       await claim3;
       await expect(claim3).to.emit(sw, "Claim").withArgs(1, ETH, 50);
       await expect(claim3).to.emit(sw, "Claim").withArgs(1, erc20.address, 250);
@@ -109,7 +109,7 @@ describe("Shardwallet", () => {
       const { sw } = await summon();
 
       await alice.sendTransaction({ to: sw.address, value: 1000 });
-      await sw.claimTo(1, [ETH], bob.address);
+      await sw.claimTo(1, [ETH], bob.address, 1e6);
       expect(await bob.getBalance()).to.equal(1000);
 
       const split = await sw.split(1, [
@@ -120,7 +120,9 @@ describe("Shardwallet", () => {
       await expect(split)
         .to.emit(sw, "Reforging")
         .withArgs([1], 2, [500000, 300000, 200000]);
-      await expect(sw.callStatic.claim(1, [ETH])).to.be.revertedWith("ERC721:");
+      await expect(sw.callStatic.claim(1, [ETH], 1e6)).to.be.revertedWith(
+        "ERC721:"
+      );
 
       expect(await sw.callStatic.computeClaimed(2, ETH)).to.equal(500);
       expect(await sw.callStatic.computeClaimed(3, ETH)).to.equal(300);
@@ -130,11 +132,11 @@ describe("Shardwallet", () => {
       await alice.sendTransaction({ to: sw.address, value: 100 });
       await expectClaimableAmounts(sw, 2, [ETH], [50]);
       await expectClaimableAmounts(sw, 3, [ETH], [30]);
-      await expect(sw.claimTo(2, [ETH], bob.address))
+      await expect(sw.claimTo(2, [ETH], bob.address, 1e6))
         .to.emit(sw, "Claim")
         .withArgs(2, ETH, 50);
       expect(await bob.getBalance()).to.equal(1050);
-      await expect(sw.claimTo(3, [ETH], bob.address))
+      await expect(sw.claimTo(3, [ETH], bob.address, 1e6))
         .to.emit(sw, "Claim")
         .withArgs(3, ETH, 30);
       expect(await bob.getBalance()).to.equal(1080);
@@ -150,7 +152,7 @@ describe("Shardwallet", () => {
 
       // Claim the 20 wei left over from shard 4, plus 10 new wei.
       await alice.sendTransaction({ to: sw.address, value: 10 });
-      await expect(sw.claimTo(5, [ETH], bob.address))
+      await expect(sw.claimTo(5, [ETH], bob.address, 1e6))
         .to.emit(sw, "Claim")
         .withArgs(5, ETH, 30);
       expect(await bob.getBalance()).to.equal(1110);
@@ -168,6 +170,46 @@ describe("Shardwallet", () => {
       expect(await sw.getShareMicros(5)).to.equal(1000000);
     });
 
+    it("permits claiming just a portion of the available amount", async () => {
+      const [alice] = await ethers.getSigners();
+      const bob = ethers.Wallet.createRandom().connect(alice.provider);
+      const { sw } = await summon();
+
+      await alice.sendTransaction({ to: sw.address, value: 1000 });
+      await sw.split(1, [
+        { shareMicros: 600000, recipient: alice.address },
+        { shareMicros: 400000, recipient: alice.address },
+      ]);
+
+      await sw.claimTo(2, [ETH], bob.address, 0.5e6);
+      expect(await bob.getBalance()).to.equal(300);
+
+      await sw.claimTo(2, [ETH], bob.address, 0.5e6); // 75% total
+      expect(await bob.getBalance()).to.equal(450);
+
+      await sw.claimTo(2, [ETH], bob.address, 1e6);
+      expect(await bob.getBalance()).to.equal(600);
+
+      await sw.claimTo(2, [ETH], bob.address, 1e6); // noop
+      expect(await bob.getBalance()).to.equal(600);
+    });
+
+    it("prohibits claiming more than the available amount", async () => {
+      const [alice] = await ethers.getSigners();
+      const bob = ethers.Wallet.createRandom().connect(alice.provider);
+      const { sw } = await summon();
+
+      await alice.sendTransaction({ to: sw.address, value: 1000 });
+      await sw.split(1, [
+        { shareMicros: 600000, recipient: alice.address },
+        { shareMicros: 400000, recipient: alice.address },
+      ]);
+
+      await expect(
+        sw.claimTo(2, [ETH], bob.address, 1000001)
+      ).to.be.revertedWith("Shardwallet: fraction too large");
+    });
+
     it("handles non-whole claim splits", async () => {
       const [alice] = await ethers.getSigners();
       const bob = ethers.Wallet.createRandom().connect(alice.provider);
@@ -181,7 +223,7 @@ describe("Shardwallet", () => {
       ]);
 
       await alice.sendTransaction({ to: sw.address, value: 100 });
-      await sw.claimTo(2, [ETH], bob.address);
+      await sw.claimTo(2, [ETH], bob.address, 1e6);
 
       // (6.4, 2.2, 1.4) should round to (6, 2, 2).
       await sw.split(2, [
@@ -216,8 +258,8 @@ describe("Shardwallet", () => {
         { shareMicros: 500000, recipient: alice.address },
         { shareMicros: 500000, recipient: alice.address },
       ]);
-      await sw.claimTo(2, [ETH], bob.address);
-      await sw.claimTo(3, [ETH], bob.address);
+      await sw.claimTo(2, [ETH], bob.address, 1e6);
+      await sw.claimTo(3, [ETH], bob.address, 1e6);
       await sw.reforge(
         [2, 3],
         [
@@ -286,7 +328,7 @@ describe("Shardwallet", () => {
         for (const { shard, bearer } of shards.slice(0, i)) {
           await sw
             .connect(bearer)
-            .claim(shard, [ETH, weth9.address])
+            .claim(shard, [ETH, weth9.address], 1e6)
             .then(countGas);
         }
       }
@@ -339,7 +381,7 @@ describe("Shardwallet", () => {
         .then(countGas);
       shards.push({ shard: 7, bearer: dolores, percent: 8 });
       shards.push({ shard: 8, bearer: dolores, percent: 2 });
-      await sw.connect(dolores).claim(7, [dai.address]).then(countGas);
+      await sw.connect(dolores).claim(7, [dai.address], 1e6).then(countGas);
       await sw
         .connect(dolores)
         .merge([shards.pop().shard, shards.pop().shard])
@@ -348,7 +390,10 @@ describe("Shardwallet", () => {
       // At this point, Dolores's shard has claimed 80% of its share of the
       // DAI, while the other shards have claimed none. Bring those all up.
       for (const { shard, bearer } of shards) {
-        await sw.connect(bearer).claim(shard, [dai.address]).then(countGas);
+        await sw
+          .connect(bearer)
+          .claim(shard, [dai.address], 1e6)
+          .then(countGas);
       }
 
       {
@@ -433,7 +478,7 @@ describe("Shardwallet", () => {
     it("reverts if attempting to claim for a shard owned by someone else", async () => {
       // (This is prohibited even though there's no ETH to claim right now.)
       await expect(
-        sw.connect(bob).callStatic.claim(1, [ETH])
+        sw.connect(bob).callStatic.claim(1, [ETH], 1e6)
       ).to.be.revertedWith("Shardwallet: unauthorized");
     });
   });
@@ -542,7 +587,7 @@ describe("Shardwallet", () => {
       const erc20 = await TestERC20.deploy();
       await erc20.mint(sw.address, 1);
       await erc20.setSilentlyFailing(true);
-      await expect(sw.claim(1, [erc20.address])).to.be.revertedWith(
+      await expect(sw.claim(1, [erc20.address], 1e6)).to.be.revertedWith(
         "Shardwallet: transfer failed"
       );
     });
@@ -552,7 +597,7 @@ describe("Shardwallet", () => {
       const erc20 = await TestERC20.deploy();
       await erc20.mint(sw.address, 1);
       await erc20.setReverting(true);
-      await expect(sw.claim(1, [erc20.address])).to.be.revertedWith(
+      await expect(sw.claim(1, [erc20.address], 1e6)).to.be.revertedWith(
         "TestERC20: revert!"
       );
     });
@@ -562,9 +607,9 @@ describe("Shardwallet", () => {
       const { sw } = await summon();
       const nonpayable = await Nonpayable.deploy();
       await alice.sendTransaction({ to: sw.address, value: 1 });
-      await expect(sw.claimTo(1, [ETH], nonpayable.address)).to.be.revertedWith(
-        "Nonpayable: revert!"
-      );
+      await expect(
+        sw.claimTo(1, [ETH], nonpayable.address, 1e6)
+      ).to.be.revertedWith("Nonpayable: revert!");
     });
 
     it("distributes what it can if ERC-20 balance has been reduced", async () => {
@@ -577,7 +622,7 @@ describe("Shardwallet", () => {
         { shareMicros: 200000, recipient: alice.address }, // shard 3
       ]);
       await erc20.mint(sw.address, 1000000);
-      await expect(sw.claim(2, [erc20.address]))
+      await expect(sw.claim(2, [erc20.address], 1e6))
         .to.emit(sw, "Claim")
         .withArgs(2, erc20.address, 800000);
 
@@ -585,7 +630,7 @@ describe("Shardwallet", () => {
       // burning tokens of an arbitrary account. Then the Shardwallet should
       // still try to withdraw what it can.
       await erc20.burn(sw.address, 100000); // 200k -> 100k
-      await expect(sw.claim(3, [erc20.address]))
+      await expect(sw.claim(3, [erc20.address], 1e6))
         .to.emit(sw, "Claim")
         .withArgs(3, erc20.address, 100000); // all that's available
       expect(await sw.callStatic.computeClaimed(3, erc20.address)).to.equal(
@@ -596,7 +641,7 @@ describe("Shardwallet", () => {
       // Now, recover the burned 100k and add another 1M; the wallet should
       // return to equilibrium.
       await erc20.mint(sw.address, 1100000);
-      await expect(sw.claim(3, [erc20.address]))
+      await expect(sw.claim(3, [erc20.address], 1e6))
         .to.emit(sw, "Claim")
         .withArgs(3, erc20.address, 300000); // 100k recovered, 200k new
 

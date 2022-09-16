@@ -364,8 +364,12 @@ contract Shardwallet is
     function _claimSingleCurrencyTo(
         uint256 tokenId,
         IERC20 currency,
-        address payable recipient
+        address payable recipient,
+        uint24 fractionMicros
     ) internal returns (uint256) {
+        if (fractionMicros > ONE_MILLION) {
+            revert("Shardwallet: fraction too large");
+        }
         if (!_isApprovedOrOwner(msg.sender, tokenId)) {
             revert("Shardwallet: unauthorized");
         }
@@ -392,6 +396,7 @@ contract Shardwallet is
         // ERC-20 whose admin can unilaterally transfer tokens.
         if (entitlement > priorClaim) {
             amount = entitlement - priorClaim;
+            amount = (amount * fractionMicros) / ONE_MILLION;
             // If balance has decreased due to an external actor, give what we
             // can.
             if (amount > balance) amount = balance;
@@ -418,14 +423,16 @@ contract Shardwallet is
     function claimTo(
         uint256 tokenId,
         IERC20[] calldata currencies,
-        address payable recipient
+        address payable recipient,
+        uint24 fractionMicros
     ) public returns (uint256[] memory) {
         uint256[] memory result = new uint256[](currencies.length);
         for (uint256 i = 0; i < currencies.length; ++i) {
             result[i] = _claimSingleCurrencyTo(
                 tokenId,
                 currencies[i],
-                recipient
+                recipient,
+                fractionMicros
             );
         }
         return result;
@@ -435,11 +442,13 @@ contract Shardwallet is
     /// sending the funds to the caller. The caller must be an owner or
     /// approved operator for the given shard. This is a convenience method for
     /// `claimTo` where `recipient == msg.sender`.
-    function claim(uint256 tokenId, IERC20[] calldata currencies)
-        external
-        returns (uint256[] memory)
-    {
-        return claimTo(tokenId, currencies, payable(msg.sender));
+    function claim(
+        uint256 tokenId,
+        IERC20[] calldata currencies,
+        uint24 fractionMicros
+    ) external returns (uint256[] memory) {
+        return
+            claimTo(tokenId, currencies, payable(msg.sender), fractionMicros);
     }
 
     /// Gets the share of the pot allotted to the given shard, in micros. For

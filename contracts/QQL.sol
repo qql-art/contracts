@@ -4,11 +4,16 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 
-import "./IOperatorFilter.sol";
-import "./ITokenUriDelegate.sol";
+import "./ERC721TokenUriDelegate.sol";
+import "./ERC721OperatorFilter.sol";
 import "./MintPass.sol";
 
-contract QQL is ERC721Enumerable, Ownable {
+contract QQL is
+    Ownable,
+    ERC721OperatorFilter,
+    ERC721TokenUriDelegate,
+    ERC721Enumerable
+{
     MintPass immutable pass_;
     uint256 nextTokenId_ = 1;
     mapping(uint256 => bytes32) tokenHash_;
@@ -21,9 +26,6 @@ contract QQL is ERC721Enumerable, Ownable {
     uint256 constant TOKEN_ROYALTY_BPS = 200; // 2%
     uint256 immutable unlockTimestamp_;
     uint256 immutable maxPremintPassId_;
-
-    IOperatorFilter operatorFilter_;
-    ITokenUriDelegate tokenUriDelegate_;
 
     event TokenRoyaltyRecipientChange(
         uint256 indexed tokenId,
@@ -142,54 +144,35 @@ contract QQL is ERC721Enumerable, Ownable {
         return tokenHashToId_[hash];
     }
 
-    function setTokenUriDelegate(ITokenUriDelegate delegate)
-        external
-        onlyOwner
-    {
-        tokenUriDelegate_ = delegate;
-    }
-
-    function tokenUriDelegate() external view returns (ITokenUriDelegate) {
-        return tokenUriDelegate_;
-    }
-
-    function tokenURI(uint256 tokenId)
+    function supportsInterface(bytes4 interfaceId)
         public
         view
-        override
-        returns (string memory)
+        virtual
+        override(ERC721Enumerable, ERC721)
+        returns (bool)
     {
-        if (!_exists(tokenId)) revert("ERC721: invalid token ID");
-        ITokenUriDelegate delegate = tokenUriDelegate_;
-        if (address(delegate) == address(0)) return "";
-        return delegate.tokenURI(tokenId);
-    }
-
-    function setOperatorFilter(IOperatorFilter filter) external onlyOwner {
-        operatorFilter_ = filter;
-    }
-
-    function operatorFilter() external view returns (IOperatorFilter) {
-        return operatorFilter_;
+        return super.supportsInterface(interfaceId);
     }
 
     function _beforeTokenTransfer(
         address from,
         address to,
         uint256 tokenId
-    ) internal virtual override {
-        if (!_mayTransfer(msg.sender, tokenId)) revert("QQL: illegal operator");
+    )
+        internal
+        virtual
+        override(ERC721, ERC721Enumerable, ERC721OperatorFilter)
+    {
         super._beforeTokenTransfer(from, to, tokenId);
     }
 
-    function _mayTransfer(address operator, uint256 tokenId)
-        internal
+    function tokenURI(uint256 tokenId)
+        public
         view
-        returns (bool)
+        virtual
+        override(ERC721TokenUriDelegate, ERC721)
+        returns (string memory)
     {
-        IOperatorFilter filter = operatorFilter_;
-        if (address(filter) == address(0)) return true;
-        if (operator == ownerOf(tokenId)) return true;
-        return filter.mayTransfer(msg.sender);
+        return super.tokenURI(tokenId);
     }
 }

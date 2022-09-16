@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 
-import "./ITokenUriDelegate.sol";
+import "./ERC721TokenUriDelegate.sol";
 
 /// @dev
 /// An `OptionalUint` is either absent (the default, uninitialized value) or a
@@ -73,7 +73,12 @@ struct ChildSpec {
 /// a shard that must be active, or `shardId` to refer to any shard. Any
 /// parameter of type `IERC20` may be `address(0)` to denote ETH or a non-zero
 /// address to denote an ERC-20 token.
-contract Shardwallet is ERC721Enumerable, Initializable, Ownable {
+contract Shardwallet is
+    Ownable,
+    Initializable,
+    ERC721TokenUriDelegate,
+    ERC721Enumerable
+{
     using OptionalUints for OptionalUint;
 
     uint24 internal constant ONE_MILLION = 1_000_000;
@@ -85,7 +90,6 @@ contract Shardwallet is ERC721Enumerable, Initializable, Ownable {
 
     mapping(IERC20 => uint256) distributed_;
 
-    ITokenUriDelegate tokenUriDelegate_;
     string name_;
     string symbol_;
 
@@ -474,26 +478,35 @@ contract Shardwallet is ERC721Enumerable, Initializable, Ownable {
         return distributed_[currency];
     }
 
-    function setTokenUriDelegate(ITokenUriDelegate delegate)
-        external
-        onlyOwner
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        virtual
+        override(ERC721Enumerable, ERC721)
+        returns (bool)
     {
-        tokenUriDelegate_ = delegate;
+        return super.supportsInterface(interfaceId);
     }
 
-    function tokenUriDelegate() external view returns (ITokenUriDelegate) {
-        return tokenUriDelegate_;
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 tokenId
+    )
+        internal
+        virtual
+        override(ERC721, ERC721Enumerable)
+    {
+        super._beforeTokenTransfer(from, to, tokenId);
     }
 
     function tokenURI(uint256 tokenId)
         public
         view
-        override
+        virtual
+        override(ERC721TokenUriDelegate, ERC721)
         returns (string memory)
     {
-        if (!_exists(tokenId)) revert("ERC721: invalid token ID");
-        ITokenUriDelegate delegate = tokenUriDelegate_;
-        if (address(delegate) == address(0)) return "";
-        return delegate.tokenURI(tokenId);
+        return super.tokenURI(tokenId);
     }
 }

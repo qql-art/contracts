@@ -1,12 +1,13 @@
 const { expect } = require("chai");
 
+const testTokenUriDelegate = require("./tokenUriDelegate.js");
+
 describe("Shardwallet", () => {
   let Nonpayable;
   let Shardwallet;
   let ShardwalletFactory;
   let TestERC20;
   let TestSplitClaim;
-  let TestTokenUriDelegate;
 
   let swf;
   let testSplitClaim;
@@ -20,9 +21,6 @@ describe("Shardwallet", () => {
     ShardwalletFactory = await ethers.getContractFactory("ShardwalletFactory");
     TestERC20 = await ethers.getContractFactory("TestERC20");
     TestSplitClaim = await ethers.getContractFactory("TestSplitClaim");
-    TestTokenUriDelegate = await ethers.getContractFactory(
-      "TestTokenUriDelegate"
-    );
 
     swf = await ShardwalletFactory.deploy();
     testSplitClaim = await TestSplitClaim.deploy();
@@ -649,31 +647,12 @@ describe("Shardwallet", () => {
     });
   });
 
-  describe("token URI delegate", () => {
-    it("works when set or unset, with active and inactive shards", async () => {
-      const [alice] = await ethers.getSigners();
-      const { sw } = await summon();
-      await sw.split(1, [
-        { shareMicros: 100000, recipient: alice.address },
-        { shareMicros: 900000, recipient: alice.address },
-      ]);
-
-      await expect(sw.tokenURI(1)).to.be.revertedWith(
-        "ERC721: invalid token ID"
-      );
-      expect(await sw.tokenURI(2)).to.equal("");
-
-      const uriDelegate = await TestTokenUriDelegate.deploy();
-      await sw.setTokenUriDelegate(uriDelegate.address);
-      expect(await sw.tokenUriDelegate()).to.equal(uriDelegate.address);
-
-      await expect(sw.tokenURI(1)).to.be.revertedWith(
-        "ERC721: invalid token ID"
-      );
-      expect(await sw.tokenURI(2)).to.equal(
-        `data:text/plain,${sw.address.toLowerCase()}%20%232`
-      );
-    });
+  testTokenUriDelegate(async () => {
+    const { sw } = await summon();
+    const [owner, nonOwner] = await ethers.getSigners();
+    const tokenId = 1;
+    const nonTokenId = 9999;
+    return { contract: sw, owner, nonOwner, tokenId, nonTokenId };
   });
 
   describe("supportsInterface", () => {

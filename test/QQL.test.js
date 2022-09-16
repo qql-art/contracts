@@ -1,10 +1,11 @@
 const { expect } = require("chai");
 const BN = ethers.BigNumber;
 
+const testTokenUriDelegate = require("./tokenUriDelegate.js");
+
 describe("QQL", () => {
   let MintPass;
   let QQL;
-  let TestTokenUriDelegate;
 
   function generateHash(address, rest) {
     return ethers.utils.solidityPack(["address", "uint96"], [address, rest]);
@@ -23,9 +24,6 @@ describe("QQL", () => {
     MintPass = await ethers.getContractFactory("MintPass");
     Clock = await ethers.getContractFactory("Clock");
     QQL = await ethers.getContractFactory("QQL");
-    TestTokenUriDelegate = await ethers.getContractFactory(
-      "TestTokenUriDelegate"
-    );
 
     clock = await Clock.deploy();
   });
@@ -185,45 +183,17 @@ describe("QQL", () => {
     await expect(qql.setScriptPiece(0, "oops")).to.be.revertedWith("immutable");
   });
 
-  describe("tokenURI", () => {
-    it("delegate can be set by the owner", async () => {
-      const { qql } = await setup();
-      const uriDelegate = await TestTokenUriDelegate.deploy();
-      await qql.setTokenUriDelegate(uriDelegate.address);
-      expect(await qql.tokenUriDelegate()).to.equal(uriDelegate.address);
-    });
-    it("delegate can't be set by non-owners", async () => {
-      const [owner, notOwner] = await ethers.getSigners();
-      const { qql } = await setup();
-      const uriDelegate = await TestTokenUriDelegate.deploy();
-      await expect(
-        qql.connect(notOwner).setTokenUriDelegate(uriDelegate.address)
-      ).to.be.revertedWith("Ownable:");
-      expect(await qql.tokenUriDelegate()).to.equal(
-        ethers.constants.AddressZero
-      );
-    });
-
-    it("works when set or unset, with extant and non-existent tokens", async () => {
-      const [owner] = await ethers.getSigners();
-      const { qql, hash, passHolder } = await setup();
-      await qql.connect(passHolder).mint(1, hash);
-
-      expect(await qql.tokenURI(1)).to.equal("");
-      await expect(qql.tokenURI(2)).to.be.revertedWith(
-        "ERC721: invalid token ID"
-      );
-
-      const uriDelegate = await TestTokenUriDelegate.deploy();
-      await qql.setTokenUriDelegate(uriDelegate.address);
-
-      expect(await qql.tokenURI(1)).to.equal(
-        `data:text/plain,${qql.address.toLowerCase()}%20%231`
-      );
-      await expect(qql.tokenURI(2)).to.be.revertedWith(
-        "ERC721: invalid token ID"
-      );
-    });
+  testTokenUriDelegate(async () => {
+    const {
+      qql,
+      passHolder,
+      hash,
+      signers: [owner, nonOwner],
+    } = await setup();
+    await qql.connect(passHolder).mint(1, hash);
+    const tokenId = 1;
+    const nonTokenId = 9999;
+    return { contract: qql, owner, nonOwner, tokenId, nonTokenId };
   });
 
   describe("supportsInterface", () => {

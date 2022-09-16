@@ -1,9 +1,10 @@
 const { expect } = require("chai");
 
+const testTokenUriDelegate = require("./tokenUriDelegate.js");
+
 describe("MintPass", () => {
   let Clock;
   let MintPass;
-  let TestTokenUriDelegate;
 
   let clock;
 
@@ -14,9 +15,6 @@ describe("MintPass", () => {
   before(async () => {
     Clock = await ethers.getContractFactory("Clock");
     MintPass = await ethers.getContractFactory("MintPass");
-    TestTokenUriDelegate = await ethers.getContractFactory(
-      "TestTokenUriDelegate"
-    );
 
     clock = await Clock.deploy();
   });
@@ -513,47 +511,6 @@ describe("MintPass", () => {
     });
   });
 
-  describe("tokenURI", () => {
-    it("delegate can be set by the owner", async () => {
-      const mp = await MintPass.deploy(1);
-      const uriDelegate = await TestTokenUriDelegate.deploy();
-      await mp.setTokenUriDelegate(uriDelegate.address);
-      expect(await mp.tokenUriDelegate()).to.equal(uriDelegate.address);
-    });
-    it("delegate can't be set by non-owners", async () => {
-      const [owner, notOwner] = await ethers.getSigners();
-      const mp = await MintPass.deploy(1);
-      const uriDelegate = await TestTokenUriDelegate.deploy();
-      await expect(
-        mp.connect(notOwner).setTokenUriDelegate(uriDelegate.address)
-      ).to.be.revertedWith("Ownable:");
-      expect(await mp.tokenUriDelegate()).to.equal(
-        ethers.constants.AddressZero
-      );
-    });
-
-    it("works when set or unset, with extant and non-existent tokens", async () => {
-      const [owner, holder] = await ethers.getSigners();
-      const mp = await MintPass.deploy(2);
-      await mp.reserve(holder.address, 1);
-
-      expect(await mp.tokenURI(1)).to.equal("");
-      await expect(mp.tokenURI(2)).to.be.revertedWith(
-        "ERC721: invalid token ID"
-      );
-
-      const uriDelegate = await TestTokenUriDelegate.deploy();
-      await mp.setTokenUriDelegate(uriDelegate.address);
-
-      expect(await mp.tokenURI(1)).to.equal(
-        `data:text/plain,${mp.address.toLowerCase()}%20%231`
-      );
-      await expect(mp.tokenURI(2)).to.be.revertedWith(
-        "ERC721: invalid token ID"
-      );
-    });
-  });
-
   it("royalties work as expected", async () => {
     const [owner, one, two] = await ethers.getSigners();
     const mp = await MintPass.deploy(9);
@@ -574,6 +531,15 @@ describe("MintPass", () => {
       ethers.BigNumber.from(500),
       ethers.BigNumber.from(200),
     ]);
+  });
+
+  testTokenUriDelegate(async () => {
+    const mp = await MintPass.deploy(1);
+    const [owner, nonOwner] = await ethers.getSigners();
+    await mp.reserve(owner.address, 1);
+    const tokenId = 1;
+    const nonTokenId = 9999;
+    return { contract: mp, owner, nonOwner, tokenId, nonTokenId };
   });
 
   describe("supportsInterface", () => {

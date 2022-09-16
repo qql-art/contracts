@@ -1,5 +1,6 @@
 const { expect } = require("chai");
 
+const testOperatorFilter = require("./operatorFilter.js");
 const testTokenUriDelegate = require("./tokenUriDelegate.js");
 
 describe("MintPass", () => {
@@ -531,6 +532,20 @@ describe("MintPass", () => {
       ethers.BigNumber.from(500),
       ethers.BigNumber.from(200),
     ]);
+  });
+
+  testOperatorFilter(async () => {
+    const mp = await MintPass.deploy(1);
+    const [owner, nonOwner, tokenHolder] = await ethers.getSigners();
+    await mp.reserve(tokenHolder.address, 1);
+    const tokenId = 1;
+    return {
+      contract: mp,
+      owner,
+      nonOwner,
+      tokenHolder,
+      tokenId,
+    };
   });
 
   testTokenUriDelegate(async () => {

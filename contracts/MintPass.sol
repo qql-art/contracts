@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 import "./ERC721TokenUriDelegate.sol";
+import "./ERC721OperatorFilter.sol";
 import "./IManifold.sol";
 
 /// @dev
@@ -130,6 +131,7 @@ struct SupplyStats {
 contract MintPass is
     Ownable,
     IManifold,
+    ERC721OperatorFilter,
     ERC721TokenUriDelegate,
     ERC721Enumerable
 {
@@ -506,7 +508,11 @@ contract MintPass is
         address from,
         address to,
         uint256 tokenId
-    ) internal virtual override(ERC721, ERC721Enumerable) {
+    )
+        internal
+        virtual
+        override(ERC721, ERC721Enumerable, ERC721OperatorFilter)
+    {
         super._beforeTokenTransfer(from, to, tokenId);
     }
 

@@ -18,6 +18,8 @@ contract QQL is ERC721, Ownable {
     address payable projectRoyaltyRecipient_;
     uint256 constant PROJECT_ROYALTY_BPS = 500; // 5%
     uint256 constant TOKEN_ROYALTY_BPS = 200; // 2%
+    uint256 immutable unlockTimestamp_;
+    uint256 immutable maxPremintPassId_;
 
     ITokenUriDelegate tokenUriDelegate_;
 
@@ -28,8 +30,14 @@ contract QQL is ERC721, Ownable {
 
     event ProjectRoyaltyRecipientChange(address indexed newRecipient);
 
-    constructor(MintPass pass) ERC721("", "") {
+    constructor(
+        MintPass pass,
+        uint256 maxPremintPassId,
+        uint256 unlockTimestamp
+    ) ERC721("", "") {
         pass_ = pass;
+        maxPremintPassId_ = maxPremintPassId;
+        unlockTimestamp_ = unlockTimestamp;
     }
 
     function name() public pure override returns (string memory) {
@@ -57,6 +65,9 @@ contract QQL is ERC721, Ownable {
         if (bytes20(msg.sender) != bytes20(hash))
             revert("QQL: minter does not match hash");
         if (tokenHashToId_[hash] != 0) revert("QQL: hash already used");
+        if (
+            block.timestamp < unlockTimestamp_ && mintPassId > maxPremintPassId_
+        ) revert("QQL: mint pass not yet unlocked");
 
         uint256 tokenId = nextTokenId_++;
         tokenHash_[tokenId] = hash;

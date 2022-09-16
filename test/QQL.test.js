@@ -10,18 +10,30 @@ describe("QQL", () => {
     return ethers.utils.solidityPack(["address", "uint96"], [address, rest]);
   }
 
+  // Sets the time for the next block but does not mine it.
+  async function setNextTimestamp(timestamp) {
+    timestamp = Number(timestamp);
+    await ethers.provider.send("evm_setNextBlockTimestamp", [timestamp]);
+  }
+  async function mine() {
+    await ethers.provider.send("evm_mine", []);
+  }
+
   before(async () => {
     MintPass = await ethers.getContractFactory("MintPass");
+    Clock = await ethers.getContractFactory("Clock");
     QQL = await ethers.getContractFactory("QQL");
     TestTokenUriDelegate = await ethers.getContractFactory(
       "TestTokenUriDelegate"
     );
+
+    clock = await Clock.deploy();
   });
 
   async function setup() {
     const mintPass = await MintPass.deploy(9);
     await mintPass.deployed();
-    const qql = await QQL.deploy(mintPass.address);
+    const qql = await QQL.deploy(mintPass.address, 3, 0);
     const signers = await ethers.getSigners();
     const passHolder = signers[1];
     await mintPass.reserve(passHolder.address, 3);
@@ -45,6 +57,26 @@ describe("QQL", () => {
       await expect(qql.connect(passHolder).mint(1, hash)).to.be.revertedWith(
         "nonexistent token"
       );
+    });
+
+    it("can only mint before unlock timestamp if it is a premint pass", async () => {
+      const mintPass = await MintPass.deploy(9);
+      await mintPass.deployed();
+      const unlockTimestamp = +(await clock.timestamp()) + 10;
+      const qql = await QQL.deploy(mintPass.address, 2, unlockTimestamp);
+      const signers = await ethers.getSigners();
+      const passHolder = signers[1];
+      await mintPass.reserve(passHolder.address, 3);
+      await mintPass.setBurner(qql.address);
+      const hash1 = generateHash(passHolder.address, 1);
+      expect(qql.connect(passHolder).mint(3, hash1)).to.be.revertedWith(
+        "not yet unlocked"
+      );
+      await qql.connect(passHolder).mint(2, hash1);
+      const hash2 = generateHash(passHolder.address, 2);
+      await setNextTimestamp(unlockTimestamp);
+      await mine();
+      await qql.connect(passHolder).mint(3, hash2);
     });
 
     it("only owner or approved can mint", async () => {
@@ -140,7 +172,7 @@ describe("QQL", () => {
   it("script pieces work", async () => {
     const mintPass = await MintPass.deploy(9);
     await mintPass.deployed();
-    const qql = await QQL.deploy(mintPass.address);
+    const qql = await QQL.deploy(mintPass.address, 9, 0);
     const signers = await ethers.getSigners();
     const a = signers[1];
     await expect(qql.connect(a).setScriptPiece(0, "hmm")).to.be.revertedWith(

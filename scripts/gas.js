@@ -38,7 +38,7 @@ TEST_CASES.push(async function* deployMintPassAndQql(props) {
   await mp.deployed();
   yield ["MintPass deploy", await mp.deployTransaction.wait()];
 
-  const qql = await props.factories.QQL.deploy(mp.address);
+  const qql = await props.factories.QQL.deploy(mp.address, 999, 0);
   await qql.deployed();
   yield ["QQL deploy", await qql.deployTransaction.wait()];
 });

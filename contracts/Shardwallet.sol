@@ -492,11 +492,7 @@ contract Shardwallet is
         address from,
         address to,
         uint256 tokenId
-    )
-        internal
-        virtual
-        override(ERC721, ERC721Enumerable)
-    {
+    ) internal virtual override(ERC721, ERC721Enumerable) {
         super._beforeTokenTransfer(from, to, tokenId);
     }
 

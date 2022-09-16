@@ -1,6 +1,7 @@
 const { expect } = require("chai");
 const BN = ethers.BigNumber;
 
+const testOperatorFilter = require("./operatorFilter.js");
 const testTokenUriDelegate = require("./tokenUriDelegate.js");
 
 describe("QQL", () => {
@@ -194,6 +195,24 @@ describe("QQL", () => {
     const tokenId = 1;
     const nonTokenId = 9999;
     return { contract: qql, owner, nonOwner, tokenId, nonTokenId };
+  });
+
+  testOperatorFilter(async () => {
+    const {
+      qql,
+      passHolder,
+      hash,
+      signers: [owner, nonOwner],
+    } = await setup();
+    await qql.connect(passHolder).mint(1, hash);
+    const tokenId = 1;
+    return {
+      contract: qql,
+      owner,
+      nonOwner,
+      tokenHolder: passHolder,
+      tokenId,
+    };
   });
 
   describe("supportsInterface", () => {

@@ -225,4 +225,25 @@ describe("QQL", () => {
       );
     });
   });
+
+  describe("supportsInterface", () => {
+    let qql;
+    before(async () => {
+      qql = await QQL.deploy(ethers.constants.AddressZero, 3, 0);
+    });
+
+    const cases = [
+      ["ERC165", 0x01ffc9a7, true],
+      ["ERC721", 0x80ac58cd, true],
+      ["ERC721Enumerable", 0x780e9d63, true],
+      ["ERC721Metadata", 0x5b5e139f, true],
+      ["false sentinel", 0xffffffff, false],
+    ];
+
+    for (const [name, id, impl] of cases) {
+      it(`${impl ? "implements" : "does not implement"} ${name}`, async () => {
+        expect(await qql.supportsInterface(id)).to.equal(impl);
+      });
+    }
+  });
 });

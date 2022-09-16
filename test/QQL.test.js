@@ -61,6 +61,19 @@ describe("QQL", () => {
       );
     });
 
+    it("parametricArtist works as intended", async () => {
+      const { passHolder, mintPass, qql, signers, hash } = await setup();
+      const fail = qql.parametricArtist(1);
+      await expect(fail).to.be.revertedWith("token does not exist");
+      await qql.connect(passHolder).mint(1, hash);
+      expect(await qql.parametricArtist(1)).to.equal(passHolder.address);
+      const owner = signers[0];
+      await qql
+        .connect(passHolder)
+        .changeTokenRoyaltyRecipient(1, owner.address);
+      expect(await qql.parametricArtist(1)).to.equal(passHolder.address);
+    });
+
     it("can only mint before unlock timestamp if it is a premint pass", async () => {
       const mintPass = await MintPass.deploy(9);
       await mintPass.deployed();

@@ -173,6 +173,12 @@ contract QQL is
         return tokenRoyaltyRecipient_[tokenId];
     }
 
+    function parametricArtist(uint256 id) external view returns (address) {
+        bytes32 hash = tokenHash_[id];
+        if (hash == bytes32(0)) revert("QQL: token does not exist");
+        return address(bytes20(hash));
+    }
+
     function changeTokenRoyaltyRecipient(
         uint256 tokenId,
         address payable newRecipient

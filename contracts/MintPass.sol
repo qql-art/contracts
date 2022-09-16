@@ -5,8 +5,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
+import "./ERC721TokenUriDelegate.sol";
 import "./IManifold.sol";
-import "./ITokenUriDelegate.sol";
 
 /// @dev
 /// Parameters for a piecewise-constant price function with the following
@@ -127,7 +127,12 @@ struct SupplyStats {
     uint64 purchased;
 }
 
-contract MintPass is ERC721Enumerable, Ownable, IManifold {
+contract MintPass is
+    Ownable,
+    IManifold,
+    ERC721TokenUriDelegate,
+    ERC721Enumerable
+{
     using ScheduleMath for AuctionSchedule;
 
     /// The maximum number of mint passes that may ever be created.
@@ -152,8 +157,6 @@ contract MintPass is ERC721Enumerable, Ownable, IManifold {
     address payable platformRoyaltyRecipient_;
     uint256 constant PROJECT_ROYALTY_BPS = 500; // 5%
     uint256 constant PLATFORM_ROYALTY_BPS = 200; // 2%
-
-    ITokenUriDelegate tokenUriDelegate_;
 
     /// Emitted whenever mint passes are purchased at auction. The `payment`
     /// field represents the amount of Ether deposited with the message call;
@@ -489,26 +492,31 @@ contract MintPass is ERC721Enumerable, Ownable, IManifold {
         return platformRoyaltyRecipient_;
     }
 
-    function setTokenUriDelegate(ITokenUriDelegate delegate)
-        external
-        onlyOwner
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        virtual
+        override(ERC721Enumerable, ERC721)
+        returns (bool)
     {
-        tokenUriDelegate_ = delegate;
+        return super.supportsInterface(interfaceId);
     }
 
-    function tokenUriDelegate() external view returns (ITokenUriDelegate) {
-        return tokenUriDelegate_;
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 tokenId
+    ) internal virtual override(ERC721, ERC721Enumerable) {
+        super._beforeTokenTransfer(from, to, tokenId);
     }
 
     function tokenURI(uint256 tokenId)
         public
         view
-        override
+        virtual
+        override(ERC721TokenUriDelegate, ERC721)
         returns (string memory)
     {
-        if (!_exists(tokenId)) revert("ERC721: invalid token ID");
-        ITokenUriDelegate delegate = tokenUriDelegate_;
-        if (address(delegate) == address(0)) return "";
-        return delegate.tokenURI(tokenId);
+        return super.tokenURI(tokenId);
     }
 }

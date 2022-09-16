@@ -20,12 +20,24 @@ contract QQL is
     mapping(bytes32 => uint256) tokenHashToId_;
     mapping(uint256 => string) scriptPieces_;
 
+    /// An artist may permit an external operator (say, a DAO that holds lots
+    /// of mint passes) to mint a single hash or any hash on their behalf.
+    mapping(bytes32 => address) hashApprovals_;
+    mapping(address => mapping(address => bool)) minterApprovals_;
+
     mapping(uint256 => address payable) tokenRoyaltyRecipient_;
     address payable projectRoyaltyRecipient_;
     uint256 constant PROJECT_ROYALTY_BPS = 500; // 5%
     uint256 constant TOKEN_ROYALTY_BPS = 200; // 2%
     uint256 immutable unlockTimestamp_;
     uint256 immutable maxPremintPassId_;
+
+    event MintApproval(address indexed minter, bytes32 indexed hash);
+    event MintApprovalForAll(
+        address indexed artist,
+        address indexed minter,
+        bool approved
+    );
 
     event TokenRoyaltyRecipientChange(
         uint256 indexed tokenId,
@@ -63,10 +75,52 @@ contract QQL is
         return scriptPieces_[id];
     }
 
+    function approveMinter(address minter, bytes32 hash) external {
+        if (bytes20(msg.sender) != bytes20(hash))
+            revert("QQL: artist does not match hash");
+        emit MintApproval(minter, hash);
+        hashApprovals_[hash] = minter;
+    }
+
+    function approveMinterForAll(address minter, bool approved) external {
+        address artist = msg.sender;
+        minterApprovals_[artist][minter] = approved;
+        emit MintApprovalForAll(msg.sender, minter, approved);
+    }
+
+    function getApprovedMinter(bytes32 hash) external view returns (address) {
+        return hashApprovals_[hash];
+    }
+
+    function isApprovedMinterForAll(address artist, address minter)
+        external
+        view
+        returns (bool)
+    {
+        return minterApprovals_[artist][minter];
+    }
+
+    function _consumeMintApproval(address minter, bytes32 hash)
+        internal
+        returns (bool)
+    {
+        address artist = address(bytes20(hash));
+        if (artist == minter) return true;
+        if (hashApprovals_[hash] == minter) {
+            // We're actually minting this, so we can consume the approval
+            // record to get a gas refund because the hash can't be used again.
+            hashApprovals_[hash] = address(0);
+            emit MintApproval(address(0), hash);
+            return true;
+        }
+        if (minterApprovals_[artist][minter]) return true;
+        return false;
+    }
+
     function mint(uint256 mintPassId, bytes32 hash) external returns (uint256) {
         if (!pass_.isApprovedOrOwner(msg.sender, mintPassId))
             revert("QQL: not pass owner or approved");
-        if (bytes20(msg.sender) != bytes20(hash))
+        if (!_consumeMintApproval(msg.sender, hash))
             revert("QQL: minter does not match hash");
         if (tokenHashToId_[hash] != 0) revert("QQL: hash already used");
         if (
@@ -76,7 +130,9 @@ contract QQL is
         uint256 tokenId = nextTokenId_++;
         tokenHash_[tokenId] = hash;
         tokenHashToId_[hash] = tokenId;
-        tokenRoyaltyRecipient_[tokenId] = payable(msg.sender);
+        // Royalty recipient is always the original artist, which may be
+        // distinct from the minter (`msg.sender`).
+        tokenRoyaltyRecipient_[tokenId] = payable(address(bytes20(hash)));
         pass_.burn(mintPassId);
         _safeMint(msg.sender, tokenId);
         return tokenId;

@@ -95,12 +95,86 @@ describe("QQL", () => {
     });
 
     it("hash must match minter address", async () => {
-      const { passHolder, mintPass, qql, signers, hash } = await setup();
+      const { passHolder, qql, signers, hash } = await setup();
       const operator = signers[2];
       const fail = qql
         .connect(passHolder)
         .mint(1, generateHash(operator.address, 0));
       await expect(fail).to.be.revertedWith("minter does not match hash");
+    });
+
+    it("hash may be specifically approved", async () => {
+      const { passHolder, qql, signers } = await setup();
+      const artist = signers[2];
+      if (artist.address === passHolder.address)
+        throw new Error("fix test setup");
+
+      const hash = generateHash(artist.address, 0);
+      expect(await qql.getApprovedMinter(hash)).to.equal(
+        ethers.constants.AddressZero
+      );
+      await expect(qql.connect(artist).approveMinter(passHolder.address, hash))
+        .to.emit(qql, "MintApproval")
+        .withArgs(passHolder.address, hash);
+      expect(await qql.getApprovedMinter(hash)).to.equal(passHolder.address);
+
+      const mint = qql.connect(passHolder).mint(1, hash);
+      await expect(mint)
+        .to.emit(qql, "MintApproval")
+        .withArgs(ethers.constants.AddressZero, hash);
+      await expect(mint)
+        .to.emit(qql, "Transfer")
+        .withArgs(ethers.constants.AddressZero, passHolder.address, 1);
+
+      expect(await qql.ownerOf(1)).to.equal(passHolder.address);
+      expect(await qql.tokenRoyaltyRecipient(1)).to.equal(artist.address);
+      expect(await qql.getApprovedMinter(hash)).to.equal(
+        ethers.constants.AddressZero
+      );
+    });
+
+    it("artist can only approve their own hashes", async () => {
+      const { passHolder, qql, signers } = await setup();
+      const artist = signers[2];
+      if (artist.address === passHolder.address)
+        throw new Error("fix test setup");
+
+      const hash = generateHash(artist.address, 0);
+      const fail = qql
+        .connect(passHolder)
+        .approveMinter(passHolder.address, hash);
+      await expect(fail).to.be.revertedWith("QQL: artist does not match hash");
+    });
+
+    it("minter may be approved-for-all-mints by artist", async () => {
+      const { passHolder, mintPass, qql, signers } = await setup();
+      const artist = signers[2];
+      if (artist.address === passHolder.address)
+        throw new Error("fix test setup");
+
+      expect(
+        await qql.isApprovedMinterForAll(artist.address, passHolder.address)
+      ).to.equal(false);
+      const hash = generateHash(artist.address, 0);
+      await expect(
+        qql.connect(artist).approveMinterForAll(passHolder.address, true)
+      )
+        .to.emit(qql, "MintApprovalForAll")
+        .withArgs(artist.address, passHolder.address, true);
+      expect(
+        await qql.isApprovedMinterForAll(artist.address, passHolder.address)
+      ).to.equal(true);
+
+      const mint = qql.connect(passHolder).mint(1, hash);
+      await expect(mint)
+        .to.emit(qql, "Transfer")
+        .withArgs(ethers.constants.AddressZero, passHolder.address, 1);
+
+      expect(await qql.ownerOf(1)).to.equal(passHolder.address);
+      expect(await qql.tokenRoyaltyRecipient(1)).to.equal(artist.address);
+      expect(
+        await qql.isApprovedMinterForAll(artist.address, passHolder.address)
+      ).to.equal(true);
     });
 
     it("hash must be unique", async () => {

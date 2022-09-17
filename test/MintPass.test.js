@@ -439,6 +439,72 @@ describe("MintPass", () => {
     });
   });
 
+  describe("emergency period", () => {
+    const EMERGENCY_DELAY_SECONDS = 86400 * 3;
+
+    it("can't be initiated by a non-owner", async () => {
+      const [owner, nonOwner] = await ethers.getSigners();
+      const mp = await MintPass.deploy(1);
+      await expect(mp.connect(nonOwner).declareEmergency()).to.be.revertedWith(
+        "Ownable:"
+      );
+    });
+
+    it("can be initiated by the owner, idempotently", async () => {
+      const [owner, nonOwner] = await ethers.getSigners();
+      const mp = await MintPass.deploy(1);
+      expect(await mp.emergencyStartTimestamp()).to.equal(0);
+      await mp.declareEmergency();
+      const t = await clock.timestamp();
+      expect(await mp.emergencyStartTimestamp()).to.equal(t);
+      await mp.declareEmergency();
+      expect(await mp.emergencyStartTimestamp()).to.equal(t);
+    });
+
+    it("prohibits an emergency withdrawal before waiting period", async () => {
+      const [owner] = await ethers.getSigners();
+      const mp = await MintPass.deploy(1);
+      await expect(mp.emergencyWithdraw(owner.address, 1)).to.be.revertedWith(
+        "MintPass: declare emergency and wait"
+      );
+      await expect(mp.declareEmergency()).to.emit(mp, "EmergencyDeclared");
+      const t = await clock.timestamp();
+      await expect(mp.emergencyWithdraw(owner.address, 1)).to.be.revertedWith(
+        "MintPass: declare emergency and wait"
+      );
+      await setNextTimestamp(+t + EMERGENCY_DELAY_SECONDS - 1);
+      await expect(mp.emergencyWithdraw(owner.address, 1)).to.be.revertedWith(
+        "MintPass: declare emergency and wait"
+      );
+    });
+
+    it("permits (only) the owner to withdraw during an emergency", async () => {
+      const [owner, holder, recipient] = await ethers.getSigners();
+      const mp = await MintPass.deploy(2);
+      const startTimestamp = +(await clock.timestamp()) + 10;
+      await setNextTimestamp(startTimestamp);
+      await mp.updateAuctionSchedule(basicSchedule(startTimestamp, 100));
+      await mp.connect(holder).purchase(1, { value: gwei(100) });
+
+      await mp.declareEmergency();
+      await setNextTimestamp(
+        +(await clock.timestamp()) + EMERGENCY_DELAY_SECONDS
+      );
+      await mine();
+
+      const before = await recipient.getBalance();
+      await expect(mp.emergencyWithdraw(recipient.address, 123))
+        .to.emit(mp, "EmergencyWithdrawal")
+        .withArgs(123);
+      const after = await recipient.getBalance();
+      expect(after.sub(before)).to.equal(123);
+
+      await expect(
+        mp.connect(recipient).emergencyWithdraw(recipient.address, 1)
+      ).to.be.revertedWith("Ownable:");
+    });
+  });
+
   describe("burner role", () => {
     it("can be set by the owner", async () => {
       const [owner, burner] = await ethers.getSigners();

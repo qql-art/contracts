@@ -160,6 +160,16 @@ contract MintPass is
     uint256 constant PROJECT_ROYALTY_BPS = 500; // 5%
     uint256 constant PLATFORM_ROYALTY_BPS = 200; // 2%
 
+    /// For use in an emergency where funds are locked in the contract (e.g.,
+    /// the auction gets soft-locked due to a logic error and can never be
+    /// completed). After an owner calls `declareEmergency()` and waits the
+    /// required duration, they can withdraw any amount of funds from the
+    /// contract. Doing so *will* break the contract invariants and make future
+    /// behavior of `claimRebate` and `withdrawProceeds` unpredictable, so
+    /// should only be used as a last resort.
+    uint256 emergencyStartTimestamp_;
+    uint256 constant EMERGENCY_DELAY_SECONDS = 3 days;
+
     /// Emitted whenever mint passes are purchased at auction. The `payment`
     /// field represents the amount of Ether deposited with the message call;
     /// this may be more than the current price of the purchased mint passes,
@@ -185,6 +195,9 @@ contract MintPass is
 
     event ProjectRoyaltyRecipientChanged(address payable recipient);
     event PlatformRoyaltyRecipientChanged(address payable recipient);
+
+    event EmergencyDeclared();
+    event EmergencyWithdrawal(uint256 amount);
 
     constructor(uint64 _maxCreated) ERC721("", "") {
         maxCreated_ = _maxCreated;
@@ -524,5 +537,26 @@ contract MintPass is
         returns (string memory)
     {
         return super.tokenURI(tokenId);
+    }
+
+    function declareEmergency() external onlyOwner {
+        if (emergencyStartTimestamp_ != 0) return;
+        emergencyStartTimestamp_ = block.timestamp;
+        emit EmergencyDeclared();
+    }
+
+    function emergencyStartTimestamp() external view returns (uint256) {
+        return emergencyStartTimestamp_;
+    }
+
+    function emergencyWithdraw(address payable recipient, uint256 amount)
+        external
+        onlyOwner
+    {
+        uint256 start = emergencyStartTimestamp_;
+        if (start == 0 || block.timestamp < start + EMERGENCY_DELAY_SECONDS)
+            revert("MintPass: declare emergency and wait");
+        recipient.transfer(amount);
+        emit EmergencyWithdrawal(amount);
     }
 }

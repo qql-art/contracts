@@ -219,6 +219,23 @@ TEST_CASES.push(async function* shardwalletLongChains(props) {
   ];
 });
 
+TEST_CASES.push(async function* scriptPieces(props) {
+  const [owner] = props.signers;
+
+  const mp = await props.factories.MintPass.deploy(999);
+  const qql = await props.factories.QQL.deploy(mp.address, 999, 0);
+
+  yield [
+    "QQL: set 1024-byte script piece",
+    await qql.setScriptPiece(1, "U".repeat(1024)).then((tx) => tx.wait()),
+  ];
+
+  yield [
+    "QQL: set 8192-byte script piece",
+    await qql.setScriptPiece(2, "U".repeat(8192)).then((tx) => tx.wait()),
+  ];
+});
+
 const Mode = Object.freeze({
   TEXT: "TEXT",
   JSON: "JSON",

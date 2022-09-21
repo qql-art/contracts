@@ -8,7 +8,7 @@ describe("QQL", () => {
   let MintPass;
   let QQL;
 
-  function generateHash(address, rest) {
+  function generateSeed(address, rest) {
     return ethers.utils.solidityPack(["address", "uint96"], [address, rest]);
   }
 
@@ -37,35 +37,35 @@ describe("QQL", () => {
     const passHolder = signers[1];
     await mintPass.reserve(passHolder.address, 3);
     await mintPass.setBurner(qql.address);
-    const hash = generateHash(passHolder.address, 1);
-    return { passHolder, mintPass, qql, signers, hash };
+    const seed = generateSeed(passHolder.address, 1);
+    return { passHolder, mintPass, qql, signers, seed };
   }
 
   describe("minting", () => {
     it("minting works as expected", async () => {
-      const { passHolder, mintPass, qql, signers, hash } = await setup();
-      expect(await qql.tokenHashToId(hash)).to.equal(0);
-      expect(await qql.tokenHash(1)).to.equal(ethers.constants.HashZero);
-      await qql.connect(passHolder).mint(1, hash);
+      const { passHolder, mintPass, qql, signers, seed } = await setup();
+      expect(await qql.seedToTokenId(seed)).to.equal(0);
+      expect(await qql.tokenSeed(1)).to.equal(ethers.constants.HashZero);
+      await qql.connect(passHolder).mint(1, seed);
       expect(await qql.balanceOf(passHolder.address)).to.equal(1);
-      expect(await qql.tokenHash(1)).to.equal(hash);
-      expect(await qql.tokenHashToId(hash)).to.equal(1);
+      expect(await qql.tokenSeed(1)).to.equal(seed);
+      expect(await qql.seedToTokenId(seed)).to.equal(1);
       expect(await qql.ownerOf(1)).to.equal(passHolder.address);
       expect(await mintPass.balanceOf(passHolder.address)).to.equal(2);
       // can't double-mint
-      await expect(qql.connect(passHolder).mint(1, hash)).to.be.revertedWith(
+      await expect(qql.connect(passHolder).mint(1, seed)).to.be.revertedWith(
         "nonexistent token"
       );
-      await expect(qql.connect(passHolder).mintTo(1, hash)).to.be.revertedWith(
+      await expect(qql.connect(passHolder).mintTo(1, seed)).to.be.revertedWith(
         "nonexistent token"
       );
     });
 
     it("parametricArtist works as intended", async () => {
-      const { passHolder, mintPass, qql, signers, hash } = await setup();
+      const { passHolder, mintPass, qql, signers, seed } = await setup();
       const fail = qql.parametricArtist(1);
       await expect(fail).to.be.revertedWith("token does not exist");
-      await qql.connect(passHolder).mint(1, hash);
+      await qql.connect(passHolder).mint(1, seed);
       expect(await qql.parametricArtist(1)).to.equal(passHolder.address);
       const owner = signers[0];
       await qql
@@ -83,88 +83,88 @@ describe("QQL", () => {
       const passHolder = signers[1];
       await mintPass.reserve(passHolder.address, 3);
       await mintPass.setBurner(qql.address);
-      const hash1 = generateHash(passHolder.address, 1);
-      expect(qql.connect(passHolder).mint(3, hash1)).to.be.revertedWith(
+      const seed1 = generateSeed(passHolder.address, 1);
+      expect(qql.connect(passHolder).mint(3, seed1)).to.be.revertedWith(
         "not yet unlocked"
       );
-      expect(qql.connect(passHolder).mintTo(3, hash1)).to.be.revertedWith(
+      expect(qql.connect(passHolder).mintTo(3, seed1)).to.be.revertedWith(
         "not yet unlocked"
       );
-      await qql.connect(passHolder).mint(2, hash1);
-      const hash2 = generateHash(passHolder.address, 2);
+      await qql.connect(passHolder).mint(2, seed1);
+      const seed2 = generateSeed(passHolder.address, 2);
       await setNextTimestamp(unlockTimestamp);
       await mine();
-      await qql.connect(passHolder).mint(3, hash2);
+      await qql.connect(passHolder).mint(3, seed2);
     });
 
     it("only owner or approved can mint", async () => {
-      const { passHolder, mintPass, qql, signers, hash } = await setup();
+      const { passHolder, mintPass, qql, signers, seed } = await setup();
       const operator = signers[2];
       let fail = qql
         .connect(operator)
-        .mint(1, generateHash(operator.address, 0));
+        .mint(1, generateSeed(operator.address, 0));
       await expect(fail).to.be.revertedWith("owner or approved");
-      fail = qql.connect(operator).mintTo(1, generateHash(operator.address, 0));
+      fail = qql.connect(operator).mintTo(1, generateSeed(operator.address, 0));
       await expect(fail).to.be.revertedWith("owner or approved");
       await mintPass.connect(passHolder).approve(operator.address, 1);
-      await qql.connect(operator).mint(1, generateHash(operator.address, 1));
+      await qql.connect(operator).mint(1, generateSeed(operator.address, 1));
       await mintPass
         .connect(passHolder)
         .setApprovalForAll(operator.address, true);
-      await qql.connect(operator).mint(2, generateHash(operator.address, 2));
+      await qql.connect(operator).mint(2, generateSeed(operator.address, 2));
       expect(await qql.balanceOf(operator.address)).to.equal(2);
     });
 
-    it("hash must match minter address", async () => {
-      const { passHolder, qql, signers, hash } = await setup();
+    it("seed must match minter address", async () => {
+      const { passHolder, qql, signers, seed } = await setup();
       const operator = signers[2];
       const fail = qql
         .connect(passHolder)
-        .mint(1, generateHash(operator.address, 0));
-      await expect(fail).to.be.revertedWith("minter does not match hash");
+        .mint(1, generateSeed(operator.address, 0));
+      await expect(fail).to.be.revertedWith("minter does not match seed");
     });
 
-    it("hash may be specifically approved", async () => {
+    it("seed may be specifically approved", async () => {
       const { passHolder, qql, signers } = await setup();
       const artist = signers[2];
       if (artist.address === passHolder.address)
         throw new Error("fix test setup");
 
-      const hash = generateHash(artist.address, 0);
-      expect(await qql.getApprovedMinter(hash)).to.equal(
+      const seed = generateSeed(artist.address, 0);
+      expect(await qql.getApprovedMinter(seed)).to.equal(
         ethers.constants.AddressZero
       );
-      await expect(qql.connect(artist).approveMinter(passHolder.address, hash))
+      await expect(qql.connect(artist).approveMinter(passHolder.address, seed))
         .to.emit(qql, "MintApproval")
-        .withArgs(passHolder.address, hash);
-      expect(await qql.getApprovedMinter(hash)).to.equal(passHolder.address);
+        .withArgs(passHolder.address, seed);
+      expect(await qql.getApprovedMinter(seed)).to.equal(passHolder.address);
 
-      const mint = qql.connect(passHolder).mint(1, hash);
+      const mint = qql.connect(passHolder).mint(1, seed);
       await expect(mint)
         .to.emit(qql, "MintApproval")
-        .withArgs(ethers.constants.AddressZero, hash);
+        .withArgs(ethers.constants.AddressZero, seed);
       await expect(mint)
         .to.emit(qql, "Transfer")
         .withArgs(ethers.constants.AddressZero, passHolder.address, 1);
 
       expect(await qql.ownerOf(1)).to.equal(passHolder.address);
       expect(await qql.tokenRoyaltyRecipient(1)).to.equal(artist.address);
-      expect(await qql.getApprovedMinter(hash)).to.equal(
+      expect(await qql.getApprovedMinter(seed)).to.equal(
         ethers.constants.AddressZero
       );
     });
 
-    it("artist can only approve their own hashes", async () => {
+    it("artist can only approve their own seed", async () => {
       const { passHolder, qql, signers } = await setup();
       const artist = signers[2];
       if (artist.address === passHolder.address)
         throw new Error("fix test setup");
 
-      const hash = generateHash(artist.address, 0);
+      const seed = generateSeed(artist.address, 0);
       const fail = qql
         .connect(passHolder)
-        .approveMinter(passHolder.address, hash);
-      await expect(fail).to.be.revertedWith("QQL: artist does not match hash");
+        .approveMinter(passHolder.address, seed);
+      await expect(fail).to.be.revertedWith("QQL: artist does not match seed");
     });
 
     it("minter may be approved-for-all-mints by artist", async () => {
@@ -176,7 +176,7 @@ describe("QQL", () => {
       expect(
         await qql.isApprovedMinterForAll(artist.address, passHolder.address)
       ).to.equal(false);
-      const hash = generateHash(artist.address, 0);
+      const seed = generateSeed(artist.address, 0);
       await expect(
         qql.connect(artist).approveMinterForAll(passHolder.address, true)
       )
@@ -186,7 +186,7 @@ describe("QQL", () => {
         await qql.isApprovedMinterForAll(artist.address, passHolder.address)
       ).to.equal(true);
 
-      const mint = qql.connect(passHolder).mint(1, hash);
+      const mint = qql.connect(passHolder).mint(1, seed);
       await expect(mint)
         .to.emit(qql, "Transfer")
         .withArgs(ethers.constants.AddressZero, passHolder.address, 1);
@@ -198,11 +198,11 @@ describe("QQL", () => {
       ).to.equal(true);
     });
 
-    it("hash must be unique", async () => {
-      const { passHolder, mintPass, qql, signers, hash } = await setup();
-      await qql.connect(passHolder).mint(1, hash);
-      const fail = qql.connect(passHolder).mint(2, hash);
-      await expect(fail).to.be.revertedWith("hash already used");
+    it("seed must be unique", async () => {
+      const { passHolder, mintPass, qql, signers, seed } = await setup();
+      await qql.connect(passHolder).mint(1, seed);
+      const fail = qql.connect(passHolder).mint(2, seed);
+      await expect(fail).to.be.revertedWith("seed already used");
     });
 
     it("can mint to an artist (leaving the artist with the QQL)", async () => {
@@ -210,8 +210,8 @@ describe("QQL", () => {
       const artist = signers[2];
       if (artist.address === passHolder.address)
         throw new Error("fix test setup");
-      const hash = generateHash(artist.address, 0);
-      const mint = qql.connect(passHolder).mintTo(1, hash);
+      const seed = generateSeed(artist.address, 0);
+      const mint = qql.connect(passHolder).mintTo(1, seed);
       await expect(mint)
         .to.emit(qql, "Transfer")
         .withArgs(ethers.constants.AddressZero, artist.address, 1);
@@ -221,12 +221,12 @@ describe("QQL", () => {
   });
 
   it("token royalty recipient works", async () => {
-    const { passHolder, qql, hash, signers } = await setup();
+    const { passHolder, qql, seed, signers } = await setup();
     const owner = signers[0];
     expect(await qql.tokenRoyaltyRecipient(1)).to.equal(
       ethers.constants.AddressZero
     );
-    await qql.connect(passHolder).mint(1, hash);
+    await qql.connect(passHolder).mint(1, seed);
     expect(await qql.tokenRoyaltyRecipient(1)).to.equal(passHolder.address);
     const fail1 = qql.changeTokenRoyaltyRecipient(1, owner.address);
     await expect(fail1).to.be.revertedWith("QQL: unauthorized");
@@ -239,7 +239,7 @@ describe("QQL", () => {
   });
 
   it("project royalty recipient works", async () => {
-    const { passHolder, qql, hash, signers } = await setup();
+    const { passHolder, qql, seed, signers } = await setup();
     const owner = signers[0];
     expect(await qql.projectRoyaltyRecipient()).to.equal(
       ethers.constants.AddressZero
@@ -255,14 +255,14 @@ describe("QQL", () => {
   });
 
   it("getRoyalties works", async () => {
-    const { passHolder, qql, hash, signers } = await setup();
+    const { passHolder, qql, seed, signers } = await setup();
     const owner = signers[0];
     await qql.setProjectRoyaltyRecipient(owner.address);
 
     const fail = qql.getRoyalties(1);
     await expect(fail).to.be.revertedWith("QQL: royalty for nonexistent token");
 
-    await qql.connect(passHolder).mint(1, hash);
+    await qql.connect(passHolder).mint(1, seed);
     expect(await qql.tokenRoyaltyRecipient(1)).to.equal(passHolder.address);
     expect(await qql.getRoyalties(1)).to.deep.equal([
       [owner.address, passHolder.address],
@@ -297,10 +297,10 @@ describe("QQL", () => {
     const {
       qql,
       passHolder,
-      hash,
+      seed,
       signers: [owner, nonOwner],
     } = await setup();
-    await qql.connect(passHolder).mint(1, hash);
+    await qql.connect(passHolder).mint(1, seed);
     const tokenId = 1;
     const nonTokenId = 9999;
     return { contract: qql, owner, nonOwner, tokenId, nonTokenId };
@@ -310,10 +310,10 @@ describe("QQL", () => {
     const {
       qql,
       passHolder,
-      hash,
+      seed,
       signers: [owner, nonOwner],
     } = await setup();
-    await qql.connect(passHolder).mint(1, hash);
+    await qql.connect(passHolder).mint(1, seed);
     const tokenId = 1;
     return {
       contract: qql,

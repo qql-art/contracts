@@ -16,13 +16,13 @@ contract QQL is
 {
     MintPass immutable pass_;
     uint256 nextTokenId_ = 1;
-    mapping(uint256 => bytes32) tokenHash_;
-    mapping(bytes32 => uint256) tokenHashToId_;
+    mapping(uint256 => bytes32) tokenSeed_;
+    mapping(bytes32 => uint256) seedToTokenId_;
     mapping(uint256 => string) scriptPieces_;
 
     /// An artist may permit an external operator (say, a DAO that holds lots
-    /// of mint passes) to mint a single hash or any hash on their behalf.
-    mapping(bytes32 => address) hashApprovals_;
+    /// of mint passes) to mint a single seed or any seed on their behalf.
+    mapping(bytes32 => address) seedApprovals_;
     mapping(address => mapping(address => bool)) minterApprovals_;
 
     mapping(uint256 => address payable) tokenRoyaltyRecipient_;
@@ -32,7 +32,7 @@ contract QQL is
     uint256 immutable unlockTimestamp_;
     uint256 immutable maxPremintPassId_;
 
-    event MintApproval(address indexed minter, bytes32 indexed hash);
+    event MintApproval(address indexed minter, bytes32 indexed seed);
     event MintApprovalForAll(
         address indexed artist,
         address indexed minter,
@@ -75,11 +75,11 @@ contract QQL is
         return scriptPieces_[id];
     }
 
-    function approveMinter(address minter, bytes32 hash) external {
-        if (bytes20(msg.sender) != bytes20(hash))
-            revert("QQL: artist does not match hash");
-        emit MintApproval(minter, hash);
-        hashApprovals_[hash] = minter;
+    function approveMinter(address minter, bytes32 seed) external {
+        if (bytes20(msg.sender) != bytes20(seed))
+            revert("QQL: artist does not match seed");
+        emit MintApproval(minter, seed);
+        seedApprovals_[seed] = minter;
     }
 
     function approveMinterForAll(address minter, bool approved) external {
@@ -88,8 +88,8 @@ contract QQL is
         emit MintApprovalForAll(msg.sender, minter, approved);
     }
 
-    function getApprovedMinter(bytes32 hash) external view returns (address) {
-        return hashApprovals_[hash];
+    function getApprovedMinter(bytes32 seed) external view returns (address) {
+        return seedApprovals_[seed];
     }
 
     function isApprovedMinterForAll(address artist, address minter)
@@ -100,54 +100,54 @@ contract QQL is
         return minterApprovals_[artist][minter];
     }
 
-    function _consumeMintApproval(address minter, bytes32 hash)
+    function _consumeMintApproval(address minter, bytes32 seed)
         internal
         returns (bool)
     {
-        address artist = address(bytes20(hash));
+        address artist = address(bytes20(seed));
         if (artist == minter) return true;
-        if (hashApprovals_[hash] == minter) {
+        if (seedApprovals_[seed] == minter) {
             // We're actually minting this, so we can consume the approval
-            // record to get a gas refund because the hash can't be used again.
-            hashApprovals_[hash] = address(0);
-            emit MintApproval(address(0), hash);
+            // record to get a gas refund because the seed can't be used again.
+            seedApprovals_[seed] = address(0);
+            emit MintApproval(address(0), seed);
             return true;
         }
         if (minterApprovals_[artist][minter]) return true;
         return false;
     }
 
-    function mintTo(uint256 mintPassId, bytes32 hash)
+    function mintTo(uint256 mintPassId, bytes32 seed)
         external
         returns (uint256)
     {
-        return _mint(mintPassId, hash, address(bytes20(hash)));
+        return _mint(mintPassId, seed, address(bytes20(seed)));
     }
 
-    function mint(uint256 mintPassId, bytes32 hash) external returns (uint256) {
-        if (!_consumeMintApproval(msg.sender, hash))
-            revert("QQL: minter does not match hash");
-        return _mint(mintPassId, hash, msg.sender);
+    function mint(uint256 mintPassId, bytes32 seed) external returns (uint256) {
+        if (!_consumeMintApproval(msg.sender, seed))
+            revert("QQL: minter does not match seed");
+        return _mint(mintPassId, seed, msg.sender);
     }
 
     function _mint(
         uint256 mintPassId,
-        bytes32 hash,
+        bytes32 seed,
         address recipient
     ) internal returns (uint256) {
         if (!pass_.isApprovedOrOwner(msg.sender, mintPassId))
             revert("QQL: not pass owner or approved");
-        if (tokenHashToId_[hash] != 0) revert("QQL: hash already used");
+        if (seedToTokenId_[seed] != 0) revert("QQL: seed already used");
         if (
             block.timestamp < unlockTimestamp_ && mintPassId > maxPremintPassId_
         ) revert("QQL: mint pass not yet unlocked");
 
         uint256 tokenId = nextTokenId_++;
-        tokenHash_[tokenId] = hash;
-        tokenHashToId_[hash] = tokenId;
+        tokenSeed_[tokenId] = seed;
+        seedToTokenId_[seed] = tokenId;
         // Royalty recipient is always the original artist, which may be
         // distinct from the minter (`msg.sender`).
-        tokenRoyaltyRecipient_[tokenId] = payable(address(bytes20(hash)));
+        tokenRoyaltyRecipient_[tokenId] = payable(address(bytes20(seed)));
         pass_.burn(mintPassId);
         _safeMint(recipient, tokenId);
         return tokenId;
@@ -174,9 +174,9 @@ contract QQL is
     }
 
     function parametricArtist(uint256 tokenId) external view returns (address) {
-        bytes32 hash = tokenHash_[tokenId];
-        if (hash == bytes32(0)) revert("QQL: token does not exist");
-        return address(bytes20(hash));
+        bytes32 seed = tokenSeed_[tokenId];
+        if (seed == bytes32(0)) revert("QQL: token does not exist");
+        return address(bytes20(seed));
     }
 
     function changeTokenRoyaltyRecipient(
@@ -209,16 +209,16 @@ contract QQL is
         bps[1] = TOKEN_ROYALTY_BPS;
     }
 
-    /// Returns the hash associated with the given QQL token. Returns
+    /// Returns the seed associated with the given QQL token. Returns
     /// `bytes32(0)` if and only if the token does not exist.
-    function tokenHash(uint256 tokenId) external view returns (bytes32) {
-        return tokenHash_[tokenId];
+    function tokenSeed(uint256 tokenId) external view returns (bytes32) {
+        return tokenSeed_[tokenId];
     }
 
-    /// Returns the tokenId associated with the given hash. Returns 0 if
-    /// and only if no token was ever minted with that hash.
-    function tokenHashToId(bytes32 hash) external view returns (uint256) {
-        return tokenHashToId_[hash];
+    /// Returns the tokenId associated with the given seed. Returns 0 if
+    /// and only if no token was ever minted with that seed.
+    function seedToTokenId(bytes32 seed) external view returns (uint256) {
+        return seedToTokenId_[seed];
     }
 
     function supportsInterface(bytes4 interfaceId)

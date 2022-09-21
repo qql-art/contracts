@@ -20,10 +20,13 @@ contract QQL is
     mapping(bytes32 => uint256) seedToTokenId_;
     mapping(uint256 => string) scriptPieces_;
 
-    /// An artist may permit an external operator (say, a DAO that holds lots
-    /// of mint passes) to mint a single seed or any seed on their behalf.
-    mapping(bytes32 => address) seedApprovals_;
-    mapping(address => mapping(address => bool)) minterApprovals_;
+    /// By default, an artist has the right to mint all of their seedes. However,
+    /// they may irevvocably transfer that right, at which point the current owner
+    /// of the right has exclusive opportunity to mint it.
+    mapping(bytes32 => address) seedOwners_;
+    /// If seed approval is given, then the approved party may claim rights for any
+    /// seed.
+    mapping(address => mapping(address => bool)) approvalForAllSeeds_;
 
     mapping(uint256 => address payable) tokenRoyaltyRecipient_;
     address payable projectRoyaltyRecipient_;
@@ -32,10 +35,14 @@ contract QQL is
     uint256 immutable unlockTimestamp_;
     uint256 immutable maxPremintPassId_;
 
-    event MintApproval(address indexed minter, bytes32 indexed seed);
-    event MintApprovalForAll(
-        address indexed artist,
-        address indexed minter,
+    event SeedTransfer(
+        address indexed from,
+        address indexed to,
+        bytes32 indexed seed
+    );
+    event ApprovalForAllSeeds(
+        address indexed owner,
+        address indexed operator,
         bool approved
     );
 
@@ -75,68 +82,66 @@ contract QQL is
         return scriptPieces_[id];
     }
 
-    function approveMinter(address minter, bytes32 seed) external {
-        if (bytes20(msg.sender) != bytes20(seed))
-            revert("QQL: artist does not match seed");
-        emit MintApproval(minter, seed);
-        seedApprovals_[seed] = minter;
+    function transferSeed(
+        address from,
+        address to,
+        bytes32 seed
+    ) external {
+        if (!isApprovedOrOwnerForSeed(msg.sender, seed))
+            revert("QQL: unauthorized for seed");
+        if (ownerOfSeed(seed) != from) revert("QQL: wrong owner for seed");
+        if (to == address(0)) revert("QQL: can't send seed to zero address");
+        emit SeedTransfer(from, to, seed);
+        seedOwners_[seed] = to;
     }
 
-    function approveMinterForAll(address minter, bool approved) external {
+    function ownerOfSeed(bytes32 seed) public view returns (address) {
+        address explicitOwner = seedOwners_[seed];
+        if (explicitOwner == address(0)) {
+            return address(bytes20(seed));
+        }
+        return explicitOwner;
+    }
+
+    function approveForAllSeeds(address operator, bool approved) external {
         address artist = msg.sender;
-        minterApprovals_[artist][minter] = approved;
-        emit MintApprovalForAll(msg.sender, minter, approved);
+        approvalForAllSeeds_[artist][operator] = approved;
+        emit ApprovalForAllSeeds(msg.sender, operator, approved);
     }
 
-    function getApprovedMinter(bytes32 seed) external view returns (address) {
-        return seedApprovals_[seed];
-    }
-
-    function isApprovedMinterForAll(address artist, address minter)
+    function isApprovedForAllSeeds(address owner, address operator)
         external
         view
         returns (bool)
     {
-        return minterApprovals_[artist][minter];
+        return approvalForAllSeeds_[owner][operator];
     }
 
-    function _consumeMintApproval(address minter, bytes32 seed)
-        internal
+    function isApprovedOrOwnerForSeed(address operator, bytes32 seed)
+        public
+        view
         returns (bool)
     {
-        address artist = address(bytes20(seed));
-        if (artist == minter) return true;
-        if (seedApprovals_[seed] == minter) {
-            // We're actually minting this, so we can consume the approval
-            // record to get a gas refund because the seed can't be used again.
-            seedApprovals_[seed] = address(0);
-            emit MintApproval(address(0), seed);
+        address seedOwner = ownerOfSeed(seed);
+        if (seedOwner == operator) {
             return true;
         }
-        if (minterApprovals_[artist][minter]) return true;
-        return false;
-    }
-
-    function mintTo(uint256 mintPassId, bytes32 seed)
-        external
-        returns (uint256)
-    {
-        return _mint(mintPassId, seed, address(bytes20(seed)));
+        return approvalForAllSeeds_[seedOwner][operator];
     }
 
     function mint(uint256 mintPassId, bytes32 seed) external returns (uint256) {
-        if (!_consumeMintApproval(msg.sender, seed))
-            revert("QQL: minter does not match seed");
-        return _mint(mintPassId, seed, msg.sender);
+        return mintTo(mintPassId, seed, msg.sender);
     }
 
-    function _mint(
+    function mintTo(
         uint256 mintPassId,
         bytes32 seed,
         address recipient
-    ) internal returns (uint256) {
+    ) public returns (uint256) {
+        if (!isApprovedOrOwnerForSeed(recipient, seed))
+            revert("QQL: unauthorized for seed");
         if (!pass_.isApprovedOrOwner(msg.sender, mintPassId))
-            revert("QQL: not pass owner or approved");
+            revert("QQL: unauthorized for pass");
         if (seedToTokenId_[seed] != 0) revert("QQL: seed already used");
         if (
             block.timestamp < unlockTimestamp_ && mintPassId > maxPremintPassId_

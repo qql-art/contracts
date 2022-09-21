@@ -56,9 +56,9 @@ describe("QQL", () => {
       await expect(qql.connect(passHolder).mint(1, seed)).to.be.revertedWith(
         "nonexistent token"
       );
-      await expect(qql.connect(passHolder).mintTo(1, seed)).to.be.revertedWith(
-        "nonexistent token"
-      );
+      await expect(
+        qql.connect(passHolder).mintTo(1, seed, passHolder.address)
+      ).to.be.revertedWith("nonexistent token");
     });
 
     it("parametricArtist works as intended", async () => {
@@ -87,9 +87,9 @@ describe("QQL", () => {
       expect(qql.connect(passHolder).mint(3, seed1)).to.be.revertedWith(
         "not yet unlocked"
       );
-      expect(qql.connect(passHolder).mintTo(3, seed1)).to.be.revertedWith(
-        "not yet unlocked"
-      );
+      expect(
+        qql.connect(passHolder).mintTo(3, seed1, passHolder.address)
+      ).to.be.revertedWith("not yet unlocked");
       await qql.connect(passHolder).mint(2, seed1);
       const seed2 = generateSeed(passHolder.address, 2);
       await setNextTimestamp(unlockTimestamp);
@@ -103,9 +103,11 @@ describe("QQL", () => {
       let fail = qql
         .connect(operator)
         .mint(1, generateSeed(operator.address, 0));
-      await expect(fail).to.be.revertedWith("owner or approved");
-      fail = qql.connect(operator).mintTo(1, generateSeed(operator.address, 0));
-      await expect(fail).to.be.revertedWith("owner or approved");
+      await expect(fail).to.be.revertedWith("unauthorized");
+      fail = qql
+        .connect(operator)
+        .mintTo(1, generateSeed(operator.address, 0), operator.address);
+      await expect(fail).to.be.revertedWith("unauthorized");
       await mintPass.connect(passHolder).approve(operator.address, 1);
       await qql.connect(operator).mint(1, generateSeed(operator.address, 1));
       await mintPass
@@ -115,76 +117,99 @@ describe("QQL", () => {
       expect(await qql.balanceOf(operator.address)).to.equal(2);
     });
 
-    it("seed must match minter address", async () => {
+    it("cannot mint another artist's seed without approval", async () => {
       const { passHolder, qql, signers, seed } = await setup();
       const operator = signers[2];
       const fail = qql
         .connect(passHolder)
         .mint(1, generateSeed(operator.address, 0));
-      await expect(fail).to.be.revertedWith("minter does not match seed");
+      await expect(fail).to.be.revertedWith("unauthorized");
     });
 
-    it("seed may be specifically approved", async () => {
-      const { passHolder, qql, signers } = await setup();
-      const artist = signers[2];
-      if (artist.address === passHolder.address)
-        throw new Error("fix test setup");
+    it("seeds may be transferred", async () => {
+      const {
+        qql,
+        signers: [a, b, c],
+      } = await setup();
 
-      const seed = generateSeed(artist.address, 0);
-      expect(await qql.getApprovedMinter(seed)).to.equal(
-        ethers.constants.AddressZero
+      const s = generateSeed(a.address, 0);
+      expect(await qql.ownerOfSeed(s)).to.equal(a.address);
+
+      const transfer = qql.connect(a).transferSeed(a.address, b.address, s);
+      await expect(transfer)
+        .to.emit(qql, "SeedTransfer")
+        .withArgs(a.address, b.address, s);
+      expect(await qql.ownerOfSeed(s)).to.equal(b.address);
+
+      const fail1 = qql.connect(a).transferSeed(a.address, c.address, s);
+      await expect(fail1).to.be.revertedWith("unauthorized");
+      const fail2 = qql.connect(a).transferSeed(b.address, c.address, s);
+      await expect(fail2).to.be.revertedWith("unauthorized");
+
+      const fail3 = qql.connect(b).transferSeed(a.address, c.address, s);
+      await expect(fail3).to.be.revertedWith("wrong owner");
+
+      await qql.connect(b).transferSeed(b.address, c.address, s);
+      expect(await qql.ownerOfSeed(s)).to.equal(c.address);
+
+      const approve = qql.connect(c).approveForAllSeeds(a.address, true);
+      await qql.connect(a).transferSeed(c.address, a.address, s);
+      expect(await qql.ownerOfSeed(s)).to.equal(a.address);
+    });
+
+    it("seed approval works as intended", async () => {
+      const {
+        qql,
+        signers: [a, b, c],
+      } = await setup();
+      expect(await qql.isApprovedForAllSeeds(c.address, a.address)).to.equal(
+        false
       );
-      await expect(qql.connect(artist).approveMinter(passHolder.address, seed))
-        .to.emit(qql, "MintApproval")
-        .withArgs(passHolder.address, seed);
-      expect(await qql.getApprovedMinter(seed)).to.equal(passHolder.address);
-
-      const mint = qql.connect(passHolder).mint(1, seed);
-      await expect(mint)
-        .to.emit(qql, "MintApproval")
-        .withArgs(ethers.constants.AddressZero, seed);
-      await expect(mint)
-        .to.emit(qql, "Transfer")
-        .withArgs(ethers.constants.AddressZero, passHolder.address, 1);
-
-      expect(await qql.ownerOf(1)).to.equal(passHolder.address);
-      expect(await qql.tokenRoyaltyRecipient(1)).to.equal(artist.address);
-      expect(await qql.getApprovedMinter(seed)).to.equal(
-        ethers.constants.AddressZero
+      const approve = qql.connect(c).approveForAllSeeds(a.address, true);
+      await expect(approve)
+        .to.emit(qql, "ApprovalForAllSeeds")
+        .withArgs(c.address, a.address, true);
+      expect(await qql.isApprovedForAllSeeds(c.address, a.address)).to.equal(
+        true
+      );
+      const disapprove = qql.connect(c).approveForAllSeeds(a.address, false);
+      await expect(disapprove)
+        .to.emit(qql, "ApprovalForAllSeeds")
+        .withArgs(c.address, a.address, false);
+      expect(await qql.isApprovedForAllSeeds(c.address, a.address)).to.equal(
+        false
       );
     });
 
-    it("artist can only approve their own seed", async () => {
-      const { passHolder, qql, signers } = await setup();
-      const artist = signers[2];
-      if (artist.address === passHolder.address)
-        throw new Error("fix test setup");
+    it("seeds may not be sent to the zero address", async () => {
+      const {
+        qql,
+        signers: [a, b, c],
+      } = await setup();
 
-      const seed = generateSeed(artist.address, 0);
+      const s = generateSeed(a.address, 0);
+
       const fail = qql
-        .connect(passHolder)
-        .approveMinter(passHolder.address, seed);
-      await expect(fail).to.be.revertedWith("QQL: artist does not match seed");
+        .connect(a)
+        .transferSeed(a.address, ethers.constants.AddressZero, s);
+      await expect(fail).to.be.revertedWith("zero address");
     });
 
-    it("minter may be approved-for-all-mints by artist", async () => {
-      const { passHolder, mintPass, qql, signers } = await setup();
+    it("transferred seeds may be minted", async () => {
+      const { passHolder, qql, signers } = await setup();
       const artist = signers[2];
       if (artist.address === passHolder.address)
         throw new Error("fix test setup");
 
-      expect(
-        await qql.isApprovedMinterForAll(artist.address, passHolder.address)
-      ).to.equal(false);
       const seed = generateSeed(artist.address, 0);
-      await expect(
-        qql.connect(artist).approveMinterForAll(passHolder.address, true)
-      )
-        .to.emit(qql, "MintApprovalForAll")
-        .withArgs(artist.address, passHolder.address, true);
-      expect(
-        await qql.isApprovedMinterForAll(artist.address, passHolder.address)
-      ).to.equal(true);
+
+      const fail = qql.connect(passHolder).mint(1, seed);
+      await expect(fail).to.be.revertedWith("unauthorized");
+      await qql
+        .connect(artist)
+        .transferSeed(artist.address, passHolder.address, seed);
+      const badMint = qql.connect(artist).mint(1, seed);
+      await expect(badMint).to.be.revertedWith("unauthorized");
 
       const mint = qql.connect(passHolder).mint(1, seed);
       await expect(mint)
@@ -193,9 +218,26 @@ describe("QQL", () => {
 
       expect(await qql.ownerOf(1)).to.equal(passHolder.address);
       expect(await qql.tokenRoyaltyRecipient(1)).to.equal(artist.address);
-      expect(
-        await qql.isApprovedMinterForAll(artist.address, passHolder.address)
-      ).to.equal(true);
+    });
+
+    it("approval for seeds enables minting", async () => {
+      const { passHolder, qql, signers } = await setup();
+      const artist = signers[2];
+      if (artist.address === passHolder.address)
+        throw new Error("fix test setup");
+
+      const seed = generateSeed(artist.address, 0);
+
+      const fail = qql.connect(passHolder).mint(1, seed);
+      await expect(fail).to.be.revertedWith("unauthorized");
+      await qql.connect(artist).approveForAllSeeds(passHolder.address, true);
+      const mint = qql.connect(passHolder).mint(1, seed);
+      await expect(mint)
+        .to.emit(qql, "Transfer")
+        .withArgs(ethers.constants.AddressZero, passHolder.address, 1);
+
+      expect(await qql.ownerOf(1)).to.equal(passHolder.address);
+      expect(await qql.tokenRoyaltyRecipient(1)).to.equal(artist.address);
     });
 
     it("seed must be unique", async () => {
@@ -205,13 +247,47 @@ describe("QQL", () => {
       await expect(fail).to.be.revertedWith("seed already used");
     });
 
+    it("mintTo enables minting to the owner of a seed", async () => {
+      const { passHolder, mintPass, qql, signers } = await setup();
+      const artist = signers[2];
+      const recipient = signers[3];
+      if (artist.address === passHolder.address)
+        throw new Error("fix test setup");
+      const seed = generateSeed(artist.address, 0);
+      await qql
+        .connect(artist)
+        .transferSeed(artist.address, recipient.address, seed);
+      const mint = qql.connect(passHolder).mintTo(1, seed, recipient.address);
+      await expect(mint)
+        .to.emit(qql, "Transfer")
+        .withArgs(ethers.constants.AddressZero, recipient.address, 1);
+      expect(await qql.ownerOf(1)).to.equal(recipient.address);
+      expect(await qql.tokenRoyaltyRecipient(1)).to.equal(artist.address);
+    });
+
+    it("mintTo enables minting to the operator of a seed", async () => {
+      const { passHolder, mintPass, qql, signers } = await setup();
+      const artist = signers[2];
+      const recipient = signers[3];
+      if (artist.address === passHolder.address)
+        throw new Error("fix test setup");
+      const seed = generateSeed(artist.address, 0);
+      await qql.connect(artist).approveForAllSeeds(recipient.address, true);
+      const mint = qql.connect(passHolder).mintTo(1, seed, recipient.address);
+      await expect(mint)
+        .to.emit(qql, "Transfer")
+        .withArgs(ethers.constants.AddressZero, recipient.address, 1);
+      expect(await qql.ownerOf(1)).to.equal(recipient.address);
+      expect(await qql.tokenRoyaltyRecipient(1)).to.equal(artist.address);
+    });
+
     it("can mint to an artist (leaving the artist with the QQL)", async () => {
       const { passHolder, mintPass, qql, signers } = await setup();
       const artist = signers[2];
       if (artist.address === passHolder.address)
         throw new Error("fix test setup");
       const seed = generateSeed(artist.address, 0);
-      const mint = qql.connect(passHolder).mintTo(1, seed);
+      const mint = qql.connect(passHolder).mintTo(1, seed, artist.address);
       await expect(mint)
         .to.emit(qql, "Transfer")
         .withArgs(ethers.constants.AddressZero, artist.address, 1);

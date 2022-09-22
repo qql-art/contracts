@@ -133,6 +133,16 @@ contract QQL is
         return mintTo(mintPassId, seed, msg.sender);
     }
 
+    /// Consumes the specified mint pass to mint a QQL with the specified seed,
+    /// which will be owned by the specified recipient. The royalty stream will
+    /// be owned by the original parametric artist (the address embedded in the
+    /// seed).
+    ///
+    /// The caller must be authorized by the owner of the mint pass to operate
+    /// the mint pass, and the recipient must be authorized by the owner of the
+    /// seed to operate the seed.
+    ///
+    /// Returns the ID of the newly minted QQL token.
     function mintTo(
         uint256 mintPassId,
         bytes32 seed,

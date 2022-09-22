@@ -36,6 +36,7 @@ function testOperatorFilter(
     it("always permits the owner to transfer their token", async () => {
       const { contract, owner, tokenHolder, tokenId } = await setUp();
       const filter = await BlacklistOperatorFilter.deploy();
+      await contract.connect(owner).setOperatorFilter(filter.address);
       await filter.setAddressBlocked(tokenHolder.address, true);
       expect(await filter.mayTransfer(tokenHolder.address)).to.equal(false);
       // Should be allowed even though the operator is blacklisted, because the

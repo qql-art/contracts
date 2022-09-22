@@ -170,6 +170,10 @@ contract MintPass is
     uint256 emergencyStartTimestamp_;
     uint256 constant EMERGENCY_DELAY_SECONDS = 3 days;
 
+    /// Emitted whenever mint passes are reserved by the owner with `reserve`.
+    /// Creating mint passes with `purchase` does not emit this event.
+    event MintPassReservation(address indexed recipient, uint256 count);
+
     /// Emitted whenever mint passes are purchased at auction. The `payment`
     /// field represents the amount of Ether deposited with the message call;
     /// this may be more than the current price of the purchased mint passes,
@@ -346,6 +350,7 @@ contract MintPass is
         onlyOwner
         returns (uint256)
     {
+        emit MintPassReservation(recipient, count);
         return
             _createMintPasses({
                 recipient: recipient,

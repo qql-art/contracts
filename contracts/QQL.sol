@@ -168,6 +168,12 @@ contract QQL is
         return tokenId;
     }
 
+    function parametricArtist(uint256 tokenId) external view returns (address) {
+        bytes32 seed = tokenSeed_[tokenId];
+        if (seed == bytes32(0)) revert("QQL: token does not exist");
+        return address(bytes20(seed));
+    }
+
     function setProjectRoyaltyRecipient(address payable recipient)
         public
         onlyOwner
@@ -186,12 +192,6 @@ contract QQL is
         returns (address)
     {
         return tokenRoyaltyRecipient_[tokenId];
-    }
-
-    function parametricArtist(uint256 tokenId) external view returns (address) {
-        bytes32 seed = tokenSeed_[tokenId];
-        if (seed == bytes32(0)) revert("QQL: token does not exist");
-        return address(bytes20(seed));
     }
 
     function changeTokenRoyaltyRecipient(

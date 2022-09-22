@@ -77,7 +77,9 @@ describe("MintPass", () => {
       expect(await mp.symbol()).to.equal("QQL-MP");
 
       await mp.reserve(owner.address, 2);
-      await mp.reserve(friend.address, 1);
+      await expect(await mp.reserve(friend.address, 1))
+        .to.emit(mp, "MintPassReservation")
+        .withArgs(friend.address, 1);
       expect(await mp.endTimestamp()).to.equal(0);
       await expect(
         mp.connect(alice).purchase(2, { value: gwei(200) })
@@ -112,11 +114,13 @@ describe("MintPass", () => {
 
       await setNextTimestamp(startTimestamp + 5);
       // Purchase two, overpaying the current exact price a bit.
-      await purchase(
-        alice,
-        2,
-        await priceAfter(5).then((x) => x.mul(2).add(10))
-      );
+      {
+        const payment = await priceAfter(5).then((x) => x.mul(2).add(10));
+        const tx = await purchase(alice, 2, payment);
+        await expect(tx)
+          .to.emit(mp, "MintPassPurchase")
+          .withArgs(alice.address, payment, 2);
+      }
 
       await setNextTimestamp(startTimestamp + 65);
       // Try underpaying, which should fail.

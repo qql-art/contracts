@@ -48,6 +48,7 @@ async function deployContract(contractFactoryName, ...args) {
   );
   console.log("Actual contract address: " + rx.contractAddress);
   console.log("Gas used: " + describeGas(rx.gasUsed, rx.effectiveGasPrice));
+  return contract;
 }
 
 function describeGas(gas, price) {

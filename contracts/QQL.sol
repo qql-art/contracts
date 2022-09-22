@@ -20,8 +20,8 @@ contract QQL is
     mapping(bytes32 => uint256) seedToTokenId_;
     mapping(uint256 => string) scriptPieces_;
 
-    /// By default, an artist has the right to mint all of their seedes. However,
-    /// they may irevvocably transfer that right, at which point the current owner
+    /// By default, an artist has the right to mint all of their seeds. However,
+    /// they may irrevocably transfer that right, at which point the current owner
     /// of the right has exclusive opportunity to mint it.
     mapping(bytes32 => address) seedOwners_;
     /// If seed approval is given, then the approved party may claim rights for any
@@ -192,7 +192,7 @@ contract QQL is
             revert("QQL: unauthorized");
         }
         if (newRecipient == address(0)) {
-            revert("QQL: Can't set zero address as token royalty recipient");
+            revert("QQL: can't set zero address as token royalty recipient");
         }
         emit TokenRoyaltyRecipientChange(tokenId, newRecipient);
         tokenRoyaltyRecipient_[tokenId] = newRecipient;
@@ -220,7 +220,7 @@ contract QQL is
         return tokenSeed_[tokenId];
     }
 
-    /// Returns the tokenId associated with the given seed. Returns 0 if
+    /// Returns the token ID associated with the given seed. Returns 0 if
     /// and only if no token was ever minted with that seed.
     function seedToTokenId(bytes32 seed) external view returns (uint256) {
         return seedToTokenId_[seed];

@@ -309,7 +309,7 @@ describe("QQL", () => {
     const fail2 = qql
       .connect(passHolder)
       .changeTokenRoyaltyRecipient(1, ethers.constants.AddressZero);
-    await expect(fail2).to.be.revertedWith("QQL: Can't set zero address");
+    await expect(fail2).to.be.revertedWith("QQL: can't set zero address");
     await qql.connect(passHolder).changeTokenRoyaltyRecipient(1, owner.address);
     expect(await qql.tokenRoyaltyRecipient(1)).to.equal(owner.address);
   });

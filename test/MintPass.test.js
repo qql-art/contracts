@@ -74,7 +74,7 @@ describe("MintPass", () => {
       const mp = await MintPass.deploy(9);
       expect(await mp.maxCreated()).to.equal(9);
       expect(await mp.name()).to.equal("QQL Mint Pass");
-      expect(await mp.symbol()).to.equal("QQL:MintPass");
+      expect(await mp.symbol()).to.equal("QQL-MP");
 
       await mp.reserve(owner.address, 2);
       await mp.reserve(friend.address, 1);

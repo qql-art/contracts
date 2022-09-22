@@ -208,7 +208,7 @@ contract MintPass is
     }
 
     function symbol() public pure override returns (string memory) {
-        return "QQL:MintPass";
+        return "QQL-MP";
     }
 
     /// Returns the total number of mint passes ever created.

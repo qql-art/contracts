@@ -1,4 +1,4 @@
-# TRNF Contracts
+# QQL Contracts
 
-Contracts for TRNF.
+Contracts for QQL.
 For testing: run `npm install` then `npm t`.

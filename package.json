@@ -1,5 +1,5 @@
 {
-  "name": "hardhat-project",
+  "name": "qql-contracts",
   "scripts": {
     "test": "hardhat test && node ./scripts/gas.js",
     "lint": "npm run prettier:check",

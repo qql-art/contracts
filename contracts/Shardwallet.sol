@@ -263,7 +263,7 @@ contract Shardwallet is
         uint256 amount,
         uint24[] memory shareMicros,
         uint256 childIndex
-    ) internal pure returns (uint256) {
+    ) public pure returns (uint256) {
         uint256 n = shareMicros.length;
         uint256 totalShare = 0;
         for (uint256 i = 0; i < n; ++i) {

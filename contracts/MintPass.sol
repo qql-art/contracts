@@ -371,6 +371,20 @@ contract MintPass is
         return firstTokenId;
     }
 
+    /// Gets the record of the given buyer's purchases so far. The `netPaid`
+    /// value indicates the total amount paid to the contract less any rebates
+    /// claimed so far. With this data, clients can compute the amount of
+    /// rebate available to the buyer at any given auction price; the rebate is
+    /// given by `netPaid - currentPrice * numPurchased`.
+    function getReceipt(address buyer)
+        external
+        view
+        returns (uint256 netPaid, uint256 numPurchased)
+    {
+        Receipt memory receipt = receipts_[buyer];
+        return (receipt.netPaid, receipt.numPurchased);
+    }
+
     /// Computes the rebate that `buyer` is currently entitled to, and returns
     /// that amount along with the value that should be stored into
     /// `receipts_[buyer]` if they claim it.

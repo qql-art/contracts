@@ -143,6 +143,10 @@ describe("MintPass", () => {
         const aliceRebate1 = await priceAfter(184).then((now) =>
           totalNetPayments(alice).sub(now.mul(2))
         );
+        expect(await mp.getReceipt(alice.address)).to.deep.equal([
+          await totalNetPayments(alice),
+          ethers.BigNumber.from(2),
+        ]);
         expect(await mp.rebateAmount(alice.address)).to.equal(aliceRebate1);
         await setNextTimestamp(startTimestamp + 185);
         expect(await diffEth(mp.connect(alice).claimRebate())).to.equal(

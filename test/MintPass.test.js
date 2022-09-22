@@ -79,7 +79,7 @@ describe("MintPass", () => {
       await mp.reserve(owner.address, 2);
       await expect(await mp.reserve(friend.address, 1))
         .to.emit(mp, "MintPassReservation")
-        .withArgs(friend.address, 1);
+        .withArgs(friend.address, 3, 1);
       expect(await mp.endTimestamp()).to.equal(0);
       await expect(
         mp.connect(alice).purchase(2, { value: gwei(200) })
@@ -120,7 +120,7 @@ describe("MintPass", () => {
         const tx = await purchase(alice, 2, payment);
         await expect(tx)
           .to.emit(mp, "MintPassPurchase")
-          .withArgs(alice.address, 2, payment, currentPrice);
+          .withArgs(alice.address, 4, 2, payment, currentPrice);
       }
 
       await setNextTimestamp(startTimestamp + 65);

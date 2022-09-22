@@ -172,7 +172,11 @@ contract MintPass is
 
     /// Emitted whenever mint passes are reserved by the owner with `reserve`.
     /// Creating mint passes with `purchase` does not emit this event.
-    event MintPassReservation(address indexed recipient, uint256 count);
+    event MintPassReservation(
+        address indexed recipient,
+        uint256 firstTokenId,
+        uint256 count
+    );
 
     /// Emitted whenever mint passes are purchased at auction. The `payment`
     /// field represents the amount of Ether deposited with the message call;
@@ -183,6 +187,7 @@ contract MintPass is
     /// Creating mint passes with `reserve` does not emit this event.
     event MintPassPurchase(
         address indexed buyer,
+        uint256 firstTokenId,
         uint256 count,
         uint256 payment,
         uint256 priceEach
@@ -335,13 +340,19 @@ contract MintPass is
 
         receipts_[msg.sender] = receipt;
 
-        emit MintPassPurchase(msg.sender, count, msg.value, priceEach);
-        return
-            _createMintPasses({
-                recipient: msg.sender,
-                count: count,
-                isPurchase: true
-            });
+        uint256 firstTokenId = _createMintPasses({
+            recipient: msg.sender,
+            count: count,
+            isPurchase: true
+        });
+        emit MintPassPurchase(
+            msg.sender,
+            firstTokenId,
+            count,
+            msg.value,
+            priceEach
+        );
+        return firstTokenId;
     }
 
     /// Creates one or more mint passes outside of the auction process, at no
@@ -351,13 +362,13 @@ contract MintPass is
         onlyOwner
         returns (uint256)
     {
-        emit MintPassReservation(recipient, count);
-        return
-            _createMintPasses({
-                recipient: recipient,
-                count: count,
-                isPurchase: false
-            });
+        uint256 firstTokenId = _createMintPasses({
+            recipient: recipient,
+            count: count,
+            isPurchase: false
+        });
+        emit MintPassReservation(recipient, firstTokenId, count);
+        return firstTokenId;
     }
 
     /// Computes the rebate that `buyer` is currently entitled to, and returns

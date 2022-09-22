@@ -183,8 +183,9 @@ contract MintPass is
     /// Creating mint passes with `reserve` does not emit this event.
     event MintPassPurchase(
         address indexed buyer,
+        uint256 count,
         uint256 payment,
-        uint256 count
+        uint256 priceEach
     );
 
     /// Emitted whenever a buyer claims a rebate. This may happen more than
@@ -334,7 +335,7 @@ contract MintPass is
 
         receipts_[msg.sender] = receipt;
 
-        emit MintPassPurchase(msg.sender, msg.value, count);
+        emit MintPassPurchase(msg.sender, count, msg.value, priceEach);
         return
             _createMintPasses({
                 recipient: msg.sender,

@@ -115,11 +115,12 @@ describe("MintPass", () => {
       await setNextTimestamp(startTimestamp + 5);
       // Purchase two, overpaying the current exact price a bit.
       {
-        const payment = await priceAfter(5).then((x) => x.mul(2).add(10));
+        const currentPrice = await priceAfter(5);
+        const payment = currentPrice.mul(2).add(10);
         const tx = await purchase(alice, 2, payment);
         await expect(tx)
           .to.emit(mp, "MintPassPurchase")
-          .withArgs(alice.address, payment, 2);
+          .withArgs(alice.address, 2, payment, currentPrice);
       }
 
       await setNextTimestamp(startTimestamp + 65);

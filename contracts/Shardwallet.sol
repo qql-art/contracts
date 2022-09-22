@@ -487,6 +487,31 @@ contract Shardwallet is
         return distributed_[currency];
     }
 
+    /// Returns `(true, x)` if *this specific shard* has claimed exactly `x`
+    /// units of the given currency. Returns `(false, 0)` if this shard has
+    /// never claimed, though its parents may have.
+    function getInternalClaimRecord(uint256 shardId, IERC20 currency)
+        external
+        view
+        returns (bool, uint256)
+    {
+        OptionalUint cr = claimRecord_[currency][shardId];
+        if (!cr.isPresent()) return (false, 0);
+        return (true, cr.decode());
+    }
+
+    /// Returns the sibling structure of the given shard. A shard's siblings
+    /// always have consecutive IDs. If the shard never existed, the result is
+    /// `(0, 0)`.
+    function getSiblings(uint256 shardId)
+        external
+        view
+        returns (uint256 firstSibling, uint256 numSiblings)
+    {
+        ShardData memory data = shardData_[shardId];
+        return (data.firstSibling, data.numSiblings);
+    }
+
     function supportsInterface(bytes4 interfaceId)
         public
         view

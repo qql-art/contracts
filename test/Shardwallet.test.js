@@ -419,6 +419,74 @@ describe("Shardwallet", () => {
     });
   });
 
+  describe("debug data", () => {
+    it("reports internal claim records", async () => {
+      const [alice] = await ethers.getSigners();
+      const { sw } = await summon();
+
+      await sw.merge([1]); // make it not the genesis shard
+
+      expect(await sw.getInternalClaimRecord(2, ETH)).to.deep.equal([
+        false,
+        ethers.BigNumber.from("0"),
+      ]);
+      await sw.claim(2, [ETH], 1e6);
+      expect(await sw.getInternalClaimRecord(2, ETH)).to.deep.equal([
+        true,
+        ethers.BigNumber.from("0"),
+      ]);
+
+      await alice.sendTransaction({ to: sw.address, value: 100 });
+
+      await sw.claim(2, [ETH], 0.25e6);
+      expect(await sw.getInternalClaimRecord(2, ETH)).to.deep.equal([
+        true,
+        ethers.BigNumber.from("25"),
+      ]);
+      await sw.claim(2, [ETH], 1e6);
+      expect(await sw.getInternalClaimRecord(2, ETH)).to.deep.equal([
+        true,
+        ethers.BigNumber.from("100"),
+      ]);
+    });
+
+    it("reports sibling data", async () => {
+      const [alice] = await ethers.getSigners();
+      const { sw } = await summon();
+
+      await sw.split(1, [
+        { shareMicros: 800000, recipient: alice.address }, // shard 2
+        { shareMicros: 200000, recipient: alice.address }, // shard 3
+      ]);
+      await sw.reforge(
+        [2, 3],
+        [
+          { shareMicros: 700000, recipient: alice.address }, // shard 4
+          { shareMicros: 200000, recipient: alice.address }, // shard 5
+          { shareMicros: 100000, recipient: alice.address }, // shard 6
+        ]
+      );
+      await sw.merge([5, 6]);
+
+      const results = [];
+      for (let i = 0; i <= 8; i++) {
+        results.push(await sw.getSiblings(i));
+      }
+      const n = (x) => ethers.BigNumber.from(x);
+      expect(results).to.deep.equal([
+        [n(0), n(0)], // nonexistent
+        [n(1), n(1)], // shard 1
+        [n(2), n(2)], // shard 2
+        [n(2), n(2)],
+        [n(4), n(3)], // shard 4
+        [n(4), n(3)],
+        [n(4), n(3)],
+        [n(7), n(1)], // shard 7
+        [n(0), n(0)], // nonexistent
+      ]);
+    });
+  });
+
   describe("invalid operations", () => {
     // Share chain state for these tests, since they only make static calls.
     let alice, bob, sw;

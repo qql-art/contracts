@@ -75,6 +75,11 @@ describe("MintPass", () => {
       expect(await mp.maxCreated()).to.equal(9);
       expect(await mp.name()).to.equal("QQL Mint Pass");
       expect(await mp.symbol()).to.equal("QQL-MP");
+      expect(await mp.supplyStats()).to.deep.equal([
+        ethers.constants.Zero,
+        ethers.constants.Zero,
+        ethers.BigNumber.from(9),
+      ]);
 
       await mp.reserve(owner.address, 2);
       await expect(await mp.reserve(friend.address, 1))
@@ -122,6 +127,11 @@ describe("MintPass", () => {
           .to.emit(mp, "MintPassPurchase")
           .withArgs(alice.address, 4, 2, payment, currentPrice);
       }
+      expect(await mp.supplyStats()).to.deep.equal([
+        ethers.BigNumber.from(3),
+        ethers.BigNumber.from(2),
+        ethers.BigNumber.from(9),
+      ]);
 
       await setNextTimestamp(startTimestamp + 65);
       // Try underpaying, which should fail.

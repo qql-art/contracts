@@ -235,6 +235,23 @@ contract MintPass is
         return maxCreated_;
     }
 
+    /// Returns information about how many mint passes have been reserved by
+    /// the owner, how many have been purchased at auction, and the maximum
+    /// number of mint passes that will ever be created. These statistics
+    /// include passes that have been burned.
+    function supplyStats()
+        external
+        view
+        returns (
+            uint256 reserved,
+            uint256 purchased,
+            uint256 max
+        )
+    {
+        SupplyStats memory stats = supplyStats_;
+        return (stats.created - stats.purchased, stats.purchased, maxCreated_);
+    }
+
     /// Configures the mint pass auction. Can be called multiple times,
     /// including while the auction is active. Reverts if this would cause the
     /// current price to increase or if the auction is already over.

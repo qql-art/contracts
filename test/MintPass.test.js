@@ -299,7 +299,7 @@ describe("MintPass", () => {
       const mp = await MintPass.deploy(1);
       const startTimestamp = +(await clock.timestamp()) + 10;
       await setNextTimestamp(startTimestamp);
-      await mp.updateAuctionSchedule({
+      const schedule = {
         startTimestamp,
         dropPeriodSeconds: 60,
         startGwei: 50e9, // 50 ETH starting price
@@ -312,7 +312,13 @@ describe("MintPass", () => {
         c2: 10,
         c3: 5,
         c4: 2,
-      });
+      };
+      await mp.updateAuctionSchedule(schedule);
+      expect(
+        Object.fromEntries(
+          Object.entries(schedule).filter((kv) => isNaN(kv[0]))
+        )
+      ).to.deep.equal(schedule);
 
       async function checkPriceSeconds({ label, seconds, expected }) {
         const actual = await mp.priceAt(startTimestamp + seconds);

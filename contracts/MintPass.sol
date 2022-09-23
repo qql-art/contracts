@@ -266,6 +266,12 @@ contract MintPass is
         if (newPrice > oldPrice) revert("MintPass: price would increase");
     }
 
+    /// Returns the parameters of the auction schedule. These parameters define
+    /// the price curve over time; see `AuctionSchedule` for semantics.
+    function auctionSchedule() external view returns (AuctionSchedule memory) {
+        return schedule_;
+    }
+
     /// Returns the block timestamp at which the auction ended, or 0 if the
     /// auction has not ended yet (including if it hasn't started).
     function endTimestamp() external view returns (uint256) {

@@ -48,7 +48,7 @@ describe("MintPass", () => {
 
   async function startAuction(mp, schedule) {
     await setNextTimestamp(schedule.startTimestamp);
-    await mp.updateAuctionSchedule(schedule);
+    return await mp.updateAuctionSchedule(schedule);
   }
 
   // Returns how much the Ether balance of the transaction's sender changed due
@@ -95,7 +95,9 @@ describe("MintPass", () => {
 
       const startTimestamp = +(await clock.timestamp()) + 10;
       await setNextTimestamp(startTimestamp);
-      await mp.updateAuctionSchedule(basicSchedule(startTimestamp, 1000));
+      await expect(
+        mp.updateAuctionSchedule(basicSchedule(startTimestamp, 1000))
+      ).to.emit(mp, "AuctionScheduleChange");
       function priceAfter(dt) {
         return mp.priceAt(startTimestamp + dt);
       }

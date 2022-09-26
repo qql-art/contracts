@@ -203,6 +203,12 @@ contract MintPass is
     /// Emitted when the contract owner withdraws the auction proceeds.
     event ProceedsWithdrawal(uint256 amount);
 
+    /// Emitted whenever the auction schedule changes, including when the
+    /// auction is first scheduled. The `schedule` value is the same as the
+    /// result of the `auctionSchedule()` method; see that method for more
+    /// details.
+    event AuctionScheduleChange(AuctionSchedule schedule);
+
     event ProjectRoyaltyRecipientChanged(address payable recipient);
     event PlatformRoyaltyRecipientChanged(address payable recipient);
 
@@ -264,6 +270,7 @@ contract MintPass is
         schedule_ = schedule;
         uint256 newPrice = currentPrice();
         if (newPrice > oldPrice) revert("MintPass: price would increase");
+        emit AuctionScheduleChange(schedule);
     }
 
     /// Returns the parameters of the auction schedule. These parameters define

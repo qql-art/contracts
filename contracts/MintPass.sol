@@ -3,6 +3,7 @@ pragma solidity ^0.8.8;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 import "./ERC721TokenUriDelegate.sol";
@@ -135,6 +136,7 @@ contract MintPass is
     ERC721TokenUriDelegate,
     ERC721Enumerable
 {
+    using Address for address payable;
     using ScheduleMath for AuctionSchedule;
 
     /// The maximum number of mint passes that may ever be created.
@@ -471,7 +473,7 @@ contract MintPass is
         (uint256 rebate, Receipt memory receipt) = _computeRebate(msg.sender);
         receipts_[msg.sender] = receipt;
         emit RebateClaim(msg.sender, rebate);
-        recipient.transfer(rebate);
+        recipient.sendValue(rebate);
     }
 
     /// Withdraws all the auction proceeds. This values each purchased mint
@@ -488,7 +490,7 @@ contract MintPass is
             proceeds = address(this).balance;
         }
         emit ProceedsWithdrawal(proceeds);
-        recipient.transfer(proceeds);
+        recipient.sendValue(proceeds);
     }
 
     /// Gets the current price of a mint pass (in wei). If the auction has
@@ -635,7 +637,7 @@ contract MintPass is
         uint256 start = emergencyStartTimestamp_;
         if (start == 0 || block.timestamp < start + EMERGENCY_DELAY_SECONDS)
             revert("MintPass: declare emergency and wait");
-        recipient.transfer(amount);
+        recipient.sendValue(amount);
         emit EmergencyWithdrawal(amount);
     }
 }

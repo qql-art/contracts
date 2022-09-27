@@ -255,6 +255,29 @@ describe("MintPass", () => {
       ).to.be.revertedWith("MintPass: count is zero");
     });
 
+    it("allows claiming a rebate to a smart wallet", async () => {
+      const InefficientSmartWallet = await ethers.getContractFactory(
+        "InefficientSmartWallet"
+      );
+      const wallet = await InefficientSmartWallet.deploy();
+
+      const [owner, alice] = await ethers.getSigners();
+      const mp = await MintPass.deploy(9);
+
+      const startTimestamp = +(await clock.timestamp()) + 10;
+      await setNextTimestamp(startTimestamp);
+      await startAuction(mp, basicSchedule(startTimestamp, 1000));
+
+      await mp.connect(alice).purchase(1, { value: gwei(1000) });
+      await setNextTimestamp(startTimestamp + 60);
+      await mine();
+      expect(await mp.rebateAmount(alice.address)).not.to.equal(0);
+
+      expect(await wallet.deposits()).to.equal(0);
+      await mp.connect(alice).claimRebateTo(wallet.address);
+      expect(await wallet.deposits()).to.equal(1);
+    });
+
     it("allows atomically applying a rebate to later purchases", async () => {
       const [owner, alice] = await ethers.getSigners();
       const mp = await MintPass.deploy(9);

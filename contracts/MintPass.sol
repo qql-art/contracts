@@ -262,7 +262,7 @@ contract MintPass is
     /// including while the auction is active. Reverts if this would cause the
     /// current price to increase or if the auction is already over.
     function updateAuctionSchedule(AuctionSchedule memory schedule)
-        external
+        public
         onlyOwner
     {
         if (endTimestamp_ != 0) revert("MintPass: auction ended");
@@ -271,6 +271,24 @@ contract MintPass is
         uint256 newPrice = currentPrice();
         if (newPrice > oldPrice) revert("MintPass: price would increase");
         emit AuctionScheduleChange(schedule);
+    }
+
+    /// Sets a new schedule that remains at the current price forevermore.
+    /// If the auction is not yet started, this unschedules the auction
+    /// (regardless of whether it is scheduled or not). Otherwise, the auction
+    /// remains open at the current price until a further schedule update.
+    function pauseAuctionSchedule() external {
+        // (no `onlyOwner` modifier; check happens in `updateAuctionSchedule`)
+        uint256 price = currentPrice();
+        AuctionSchedule memory schedule; // zero-initialized
+        if (price != type(uint256).max) {
+            uint48 priceGwei = uint48(price / 1 gwei);
+            assert(priceGwei * 1 gwei == price);
+            schedule.startTimestamp = 1;
+            schedule.dropPeriodSeconds = 0;
+            schedule.reserveGwei = priceGwei;
+        }
+        updateAuctionSchedule(schedule);
     }
 
     /// Returns the parameters of the auction schedule. These parameters define

@@ -410,6 +410,69 @@ describe("MintPass", () => {
       expect(await mp.currentPrice()).to.equal(gwei(500));
     });
 
+    describe("pausing", () => {
+      it("permits pausing the schedule before or during the auction", async () => {
+        const MaxUint256 = ethers.constants.MaxUint256;
+        const mp = await MintPass.deploy(1);
+
+        const t0 = +(await clock.timestamp());
+
+        function pausedSchedule(reserveGwei) {
+          const schedule = Array(12).fill(0);
+          schedule[0 /* startTimestamp */] = reserveGwei > 0 ? 1 : 0;
+          schedule[4 /* reserveGwei */] = reserveGwei;
+          return schedule;
+        }
+
+        // Pause before the schedule is ever set. This is a no-op.
+        await expect(mp.pauseAuctionSchedule()).to.emit(
+          mp,
+          "AuctionScheduleChange"
+        );
+        expect(await mp.priceAt(0)).to.equal(MaxUint256);
+        expect(await mp.priceAt(MaxUint256)).to.equal(MaxUint256);
+        expect(await mp.auctionSchedule()).to.deep.equal(pausedSchedule(0));
+
+        // Pause after the schedule is set but before it's begun. This
+        // unschedules the auction.
+        const t1 = t0 + 10;
+        await setNextTimestamp(t1 - 3);
+        await mp.updateAuctionSchedule(basicSchedule(t1, 1000));
+        expect(await mp.priceAt(0)).to.equal(MaxUint256);
+        expect(await mp.priceAt(MaxUint256)).to.equal(gwei(100));
+        await mp.pauseAuctionSchedule();
+        expect(await mp.priceAt(0)).to.equal(MaxUint256);
+        expect(await mp.priceAt(t1)).to.equal(MaxUint256);
+        expect(await mp.priceAt(MaxUint256)).to.equal(MaxUint256);
+        expect(await mp.auctionSchedule()).to.deep.equal(pausedSchedule(0));
+
+        // Pause while the auction is ongoing. This makes the price constant from
+        // now on.
+        const t2 = t1 + 10;
+        await setNextTimestamp(t2 - 3);
+        await mp.updateAuctionSchedule(basicSchedule(t2, 1000));
+        await setNextTimestamp(t2 + 77);
+        await mine();
+        expect(await mp.currentPrice()).to.equal(gwei(960));
+        expect(await mp.priceAt(MaxUint256)).to.equal(gwei(100));
+        await mp.pauseAuctionSchedule();
+        expect(await mp.priceAt(0)).to.equal(MaxUint256);
+        expect(await mp.priceAt(1)).to.equal(gwei(960));
+        expect(await mp.currentPrice()).to.equal(gwei(960));
+        expect(await mp.priceAt(MaxUint256)).to.equal(gwei(960));
+        expect(await mp.auctionSchedule()).to.deep.equal(pausedSchedule(960));
+      });
+
+      it("only lets the owner pause the auction", async () => {
+        const [owner, nonOwner] = await ethers.getSigners();
+        const mp = await MintPass.deploy(1);
+        await mp.connect(owner).callStatic.pauseAuctionSchedule();
+        await expect(
+          mp.connect(nonOwner).callStatic.pauseAuctionSchedule()
+        ).to.be.revertedWith("Ownable:");
+      });
+    });
+
     it("permits passes to be burned before the auction is finished", async () => {
       const [owner, alice, burner] = await ethers.getSigners();
       const mp = await MintPass.deploy(12);

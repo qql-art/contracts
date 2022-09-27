@@ -22,8 +22,13 @@ abstract contract ERC721OperatorFilter is ERC721, Ownable {
         address to,
         uint256 tokenId
     ) internal virtual override(ERC721) {
-        if (!_mayTransfer(msg.sender, tokenId))
+        if (
+            from != address(0) &&
+            to != address(0) &&
+            !_mayTransfer(msg.sender, tokenId)
+        ) {
             revert("ERC721OperatorFilter: illegal operator");
+        }
         super._beforeTokenTransfer(from, to, tokenId);
     }
 

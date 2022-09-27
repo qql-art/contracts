@@ -400,6 +400,36 @@ describe("QQL", () => {
     };
   });
 
+  describe("extra operator filter tests", () => {
+    it("allows minting when an operator filter is set for both QQL and MintPass", async () => {
+      const [owner] = await ethers.getSigners();
+
+      const BlacklistOperatorFilter = await ethers.getContractFactory(
+        "BlacklistOperatorFilter"
+      );
+      const filter = await BlacklistOperatorFilter.deploy();
+
+      const mp = await MintPass.deploy(9);
+      await mp.deployed();
+      const qql = await QQL.deploy(mp.address, 3, 0);
+      await mp.setBurner(qql.address);
+
+      await mp.reserve(owner.address, 1);
+      const seed = generateSeed(owner.address, 1);
+
+      await mp.setOperatorFilter(filter.address);
+      await qql.setOperatorFilter(filter.address);
+
+      expect(await mp.ownerOf(1)).to.equal(owner.address);
+      await expect(qql.ownerOf(1)).to.be.revertedWith("ERC721:");
+
+      await qql.mint(1, seed);
+
+      await expect(mp.ownerOf(1)).to.be.revertedWith("ERC721:");
+      expect(await qql.ownerOf(1)).to.equal(owner.address);
+    });
+  });
+
   describe("supportsInterface", () => {
     let qql;
     before(async () => {

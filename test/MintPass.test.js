@@ -727,6 +727,22 @@ describe("MintPass", () => {
     };
   });
 
+  describe("extra operator filter tests", () => {
+    it("allows minting when an operator filter is set", async () => {
+      const BlacklistOperatorFilter = await ethers.getContractFactory(
+        "BlacklistOperatorFilter"
+      );
+      const filter = await BlacklistOperatorFilter.deploy();
+
+      const mp = await MintPass.deploy(1);
+      const [owner] = await ethers.getSigners();
+      await mp.setOperatorFilter(filter.address);
+
+      await mp.reserve(owner.address, 1);
+      expect(await mp.ownerOf(1)).to.equal(owner.address);
+    });
+  });
+
   testTokenUriDelegate(async () => {
     const mp = await MintPass.deploy(1);
     const [owner, nonOwner] = await ethers.getSigners();

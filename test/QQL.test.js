@@ -41,6 +41,14 @@ describe("QQL", () => {
     return { passHolder, mintPass, qql, signers, seed };
   }
 
+  it("constructor accessors work", async () => {
+    const mintPass = await MintPass.deploy(9);
+    await mintPass.deployed();
+    const qql = await QQL.deploy(mintPass.address, 3, 1000);
+    expect(await qql.unlockTimestamp()).to.equal(1000);
+    expect(await qql.maxPremintPassId()).to.equal(3);
+  });
+
   describe("minting", () => {
     it("minting works as expected", async () => {
       const { passHolder, mintPass, qql, signers, seed } = await setup();

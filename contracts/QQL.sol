@@ -267,4 +267,12 @@ contract QQL is
     {
         return super.tokenURI(tokenId);
     }
+
+    function unlockTimestamp() public view returns (uint256) {
+        return unlockTimestamp_;
+    }
+
+    function maxPremintPassId() public view returns (uint256) {
+        return maxPremintPassId_;
+    }
 }

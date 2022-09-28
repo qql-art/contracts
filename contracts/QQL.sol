@@ -55,12 +55,12 @@ contract QQL is
 
     constructor(
         MintPass pass,
-        uint256 maxPremintPassId,
-        uint256 unlockTimestamp
+        uint256 _maxPremintPassId,
+        uint256 _unlockTimestamp
     ) ERC721("", "") {
         pass_ = pass;
-        maxPremintPassId_ = maxPremintPassId;
-        unlockTimestamp_ = unlockTimestamp;
+        maxPremintPassId_ = _maxPremintPassId;
+        unlockTimestamp_ = _unlockTimestamp;
     }
 
     function name() public pure override returns (string memory) {

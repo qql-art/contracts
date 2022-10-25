@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/utils/structs/EnumerableMap.sol";
 
 import "./MintPass.sol";
 import "./QQL.sol";
+import "./IWeth.sol";
 
 struct ListingData {
     address lister;
@@ -23,6 +24,7 @@ contract SeedMarket is Ownable {
 
     QQL immutable qql_;
     MintPass immutable pass_;
+    IWeth immutable weth_;
     uint256 blessingFee_;
 
     mapping(bytes32 => bool) blessed_;
@@ -37,10 +39,12 @@ contract SeedMarket is Ownable {
     constructor(
         QQL _qql,
         MintPass _pass,
+        IWeth _weth,
         uint256 blessingFee
     ) {
         qql_ = _qql;
         pass_ = _pass;
+        weth_ = _weth;
         blessingFee_ = blessingFee;
         emit BlessingFeeUpdate(0, blessingFee);
     }
@@ -65,6 +69,7 @@ contract SeedMarket is Ownable {
         if (msg.value != blessingFee_) revert("SeedMarket: wrong fee");
         if (blessed_[seed]) revert("SeedMarket: already blessed");
         emit Blessing(seed, msg.sender);
+        blessed_[seed] = true;
     }
 
     function blessAndList(bytes32 seed, uint96 price) external payable {
@@ -72,13 +77,26 @@ contract SeedMarket is Ownable {
         list(seed, price);
     }
 
+    function isBlessed(bytes32 seed) external view returns (bool) {
+        return blessed_[seed];
+    }
+
     function list(bytes32 seed, uint96 price) public payable {
         if (!qql_.isApprovedOrOwnerForSeed(msg.sender, seed))
             revert("SeedMarket: unauthorized");
+        if (!blessed_[seed]) revert("SeedMarket: must bless to list");
         qql_.transferSeed(qql_.ownerOfSeed(seed), address(this), seed);
         listings_[seed] = ListingData({lister: msg.sender, price: price});
         emit Listing(seed, msg.sender, price);
-        revert("SeedMarket: not yet implemented");
+    }
+
+    function getListing(bytes32 seed)
+        external
+        view
+        returns (address lister, uint256 price)
+    {
+        ListingData memory lst = listings_[seed];
+        return (lst.lister, uint256(lst.price));
     }
 
     function reprice(bytes32 seed, uint96 price) external {

@@ -26,7 +26,7 @@ describe("SeedMarket", () => {
     const seed = generateSeed(artist.address, 0);
     const seed2 = generateSeed(artist.address, 2);
 
-    const mp = await MintPass.deploy(3);
+    const mp = await MintPass.deploy(2);
     const qql = await QQL.deploy(mp.address, 0, 0);
     const weth = await TestWeth.deploy();
     const sm = await SeedMarket.deploy(
@@ -36,7 +36,8 @@ describe("SeedMarket", () => {
       DEFAULT_FEE
     );
     await mp.setBurner(qql.address);
-    await mp.reserve(holder.address, 3);
+    await mp.reserve(holder.address, 1);
+    await mp.reserve(alice.address, 1);
 
     await qql.connect(artist).approveForAllSeeds(sm.address, true);
     await mp.connect(holder).setApprovalForAll(sm.address, true);
@@ -280,6 +281,93 @@ describe("SeedMarket", () => {
       const { sm, artist, alice, seed, qql } = await setUp();
       const fail = sm.connect(artist).delist(seed);
       await expect(fail).to.be.revertedWith("unauthorized");
+    });
+  });
+
+  describe("filling listings", async () => {
+    it("fails on an unlisted seed", async () => {
+      const { sm, artist, holder, seed, qql, mp } = await setUp();
+      const fail = sm.connect(holder).fillListing(seed, 1);
+      await expect(fail).to.be.revertedWith("unlisted seed");
+    });
+    it("fails if correct payment is not made", async () => {
+      const { sm, artist, holder, seed, qql, mp } = await setUp();
+      await sm.connect(artist).blessAndList(seed, 100, { value: DEFAULT_FEE });
+      const fail1 = sm.connect(holder).fillListing(seed, 1);
+      await expect(fail1).to.be.revertedWith("SeedMarket: incorrect payment");
+      const fail2 = sm.connect(holder).fillListing(seed, 1, { value: 99 });
+      await expect(fail2).to.be.revertedWith("SeedMarket: incorrect payment");
+      const fail3 = sm.connect(holder).fillListing(seed, 1, { value: 101 });
+      await expect(fail3).to.be.revertedWith("SeedMarket: incorrect payment");
+    });
+    it("fails if the buyer has not approved the mint pass contract", async () => {
+      const { sm, artist, alice, seed, qql, mp } = await setUp();
+      await sm.connect(artist).blessAndList(seed, 100, { value: DEFAULT_FEE });
+      const fail1 = sm.connect(alice).fillListing(seed, 2, { value: 100 });
+      await expect(fail1).to.be.revertedWith("QQL: unauthorized for pass");
+    });
+    it("emits a Trade event", async () => {
+      const { sm, artist, holder, seed, qql, mp } = await setUp();
+      await sm.connect(artist).blessAndList(seed, 100, { value: DEFAULT_FEE });
+      const go = sm.connect(holder).fillListing(seed, 1, { value: 100 });
+      await expect(go)
+        .to.emit(sm, "Trade")
+        .withArgs(seed, artist.address, holder.address, 100, false);
+    });
+    it("works with 0 price", async () => {
+      const { sm, artist, holder, seed, qql, mp } = await setUp();
+      await sm.connect(artist).blessAndList(seed, 0, { value: DEFAULT_FEE });
+      const go = sm.connect(holder).fillListing(seed, 1);
+      await expect(go)
+        .to.emit(sm, "Trade")
+        .withArgs(seed, artist.address, holder.address, 0, false);
+    });
+    it("works with nonzero price", async () => {
+      const { sm, artist, holder, seed, qql, mp } = await setUp();
+      await sm.connect(artist).blessAndList(seed, 100, { value: DEFAULT_FEE });
+      const go = sm.connect(holder).fillListing(seed, 1, { value: 100 });
+      await expect(go)
+        .to.emit(sm, "Trade")
+        .withArgs(seed, artist.address, holder.address, 100, false);
+    });
+    it("mints the corresponding QQL", async () => {
+      const { sm, artist, holder, seed, qql, mp } = await setUp();
+      await sm.connect(artist).blessAndList(seed, 100, { value: DEFAULT_FEE });
+      await sm.connect(holder).fillListing(seed, 1, { value: 100 });
+      expect(await qql.tokenSeed(1)).to.equal(seed);
+    });
+    it("pays the seed lister", async () => {
+      const { sm, artist, holder, seed, qql, mp } = await setUp();
+      await sm.connect(artist).blessAndList(seed, 100, { value: DEFAULT_FEE });
+      const priorBalance = await artist.getBalance();
+      await sm.connect(holder).fillListing(seed, 1, { value: 100 });
+      const afterBalance = await artist.getBalance();
+      const delta = afterBalance.sub(priorBalance);
+      expect(delta).to.equal(BN.from(100));
+    });
+    it("leaves the seed de-listed", async () => {
+      const { sm, artist, holder, seed, qql, mp } = await setUp();
+      await sm.connect(artist).blessAndList(seed, 100, { value: DEFAULT_FEE });
+      await sm.connect(holder).fillListing(seed, 1, { value: 100 });
+      const listing = await sm.getListing(seed);
+      expect(await sm.getListing(seed)).to.deep.equal([
+        ethers.constants.AddressZero,
+        BN.from(100),
+      ]);
+    });
+  });
+  describe("bid", async () => {
+    it("does not require the seed to be blessed", async () => {
+      //
+    });
+    it("emits a Bid event", async () => {
+      //
+    });
+    it("subsequent bids override prior bids", async () => {
+      //
+    });
+    it("unbid works", async () => {
+      //
     });
   });
 });

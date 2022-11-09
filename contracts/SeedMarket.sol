@@ -33,6 +33,13 @@ contract SeedMarket is Ownable {
 
     event BlessingFeeUpdate(uint256 oldFee, uint256 newFee);
     event Blessing(bytes32 indexed seed, address cleric);
+    event Trade(
+        bytes32 indexed seed,
+        address indexed seller,
+        address indexed buyer,
+        uint256 price,
+        bool wasBid
+    );
     event Listing(bytes32 indexed seed, address indexed lister, uint96 price);
     event Delisting(bytes32 indexed seed);
 
@@ -113,6 +120,23 @@ contract SeedMarket is Ownable {
         delete listings_[seed].lister;
         qql_.transferSeed(address(this), msg.sender, seed);
         emit Delisting(seed);
+    }
+
+    function fillListing(bytes32 seed, uint256 mintPassId) external payable {
+        ListingData memory lst = listings_[seed];
+        address lister = lst.lister;
+        uint256 price = uint256(lst.price);
+        if (lister == address(0)) revert("SeedMarket: unlisted seed");
+        if (msg.value != price) revert("SeedMarket: incorrect payment");
+        delete listings_[seed].lister;
+        qql_.transferSeed(address(this), msg.sender, seed);
+        emit Trade(seed, lister, msg.sender, price, false);
+        // Careful: invokes ERC721 received hook for buyer
+        qql_.mintTo(mintPassId, seed, msg.sender);
+        if (price > 0) {
+            // Careful: invokes fallback function on seller
+            payable(lister).transfer(price);
+        }
     }
 
     function bid(

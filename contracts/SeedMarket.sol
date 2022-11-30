@@ -128,6 +128,8 @@ contract SeedMarket is Ownable {
         uint256 price = uint256(lst.price);
         if (lister == address(0)) revert("SeedMarket: unlisted seed");
         if (msg.value != price) revert("SeedMarket: incorrect payment");
+        if (!pass_.isApprovedOrOwner(msg.sender, mintPassId))
+            revert("SeedMarket: not owner or approved for pass");
         delete listings_[seed].lister;
         qql_.transferSeed(address(this), msg.sender, seed);
         emit Trade(seed, lister, msg.sender, price, false);

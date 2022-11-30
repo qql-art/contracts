@@ -14,11 +14,6 @@ struct ListingData {
     uint96 price;
 }
 
-struct BidData {
-    uint16 mintPassId;
-    uint96 price;
-}
-
 contract SeedMarket is Ownable {
     using EnumerableMap for EnumerableMap.AddressToUintMap;
 
@@ -29,7 +24,6 @@ contract SeedMarket is Ownable {
 
     mapping(bytes32 => bool) blessed_;
     mapping(bytes32 => ListingData) listings_;
-    mapping(bytes32 => EnumerableMap.AddressToUintMap) bids_; /* packed `BidData` */
 
     event BlessingFeeUpdate(uint256 oldFee, uint256 newFee);
     event Blessing(bytes32 indexed seed, address cleric);
@@ -37,8 +31,7 @@ contract SeedMarket is Ownable {
         bytes32 indexed seed,
         address indexed seller,
         address indexed buyer,
-        uint256 price,
-        bool wasBid
+        uint256 price
     );
     event Listing(bytes32 indexed seed, address indexed lister, uint96 price);
     event Delisting(bytes32 indexed seed);
@@ -132,46 +125,12 @@ contract SeedMarket is Ownable {
             revert("SeedMarket: not owner or approved for pass");
         delete listings_[seed].lister;
         qql_.transferSeed(address(this), msg.sender, seed);
-        emit Trade(seed, lister, msg.sender, price, false);
+        emit Trade(seed, lister, msg.sender, price);
         // Careful: invokes ERC721 received hook for buyer
         qql_.mintTo(mintPassId, seed, msg.sender);
         if (price > 0) {
             // Careful: invokes fallback function on seller
             payable(lister).transfer(price);
         }
-    }
-
-    function bid(
-        bytes32 seed,
-        uint96 price,
-        uint256 mintPassId
-    ) public {
-        if (mintPassId != uint16(mintPassId))
-            revert("SeedMarket: invalid data");
-        BidData memory _bid = BidData({
-            mintPassId: uint16(mintPassId),
-            price: price
-        });
-        bids_[seed].set(msg.sender, Bids.pack(_bid));
-    }
-
-    function unbid(bytes32 seed) external {
-        bid(seed, 0, 0);
-    }
-}
-
-library Bids {
-    function pack(BidData memory bid) internal pure returns (uint256) {
-        return (uint256(bid.mintPassId) << 240) | uint256(bid.price);
-    }
-
-    function unpack(uint256 packedBid)
-        internal
-        pure
-        returns (BidData memory bid)
-    {
-        bid.mintPassId = uint16(packedBid >> 240);
-        bid.price = uint96(packedBid);
-        if (bid.price != uint240(packedBid)) revert("SeedMarket: invalid data");
     }
 }

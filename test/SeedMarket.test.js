@@ -91,7 +91,7 @@ describe("SeedMarket", () => {
       const go = sm.connect(artist).bless(seed, { value: DEFAULT_FEE });
       await expect(go).to.emit(sm, "Blessing").withArgs(seed, artist.address);
     });
-    it("may not be done without consent of the artist or operator", async () => {
+    it("may not be done without consent of the artist or owner", async () => {
       const { sm, artist, bob, seed } = await setUp();
       const fail = sm.connect(bob).bless(seed, { value: DEFAULT_FEE });
       await expect(fail).to.be.revertedWith("unauthorized");
@@ -312,7 +312,7 @@ describe("SeedMarket", () => {
       const go = sm.connect(holder).fillListing(seed, 1, { value: 100 });
       await expect(go)
         .to.emit(sm, "Trade")
-        .withArgs(seed, artist.address, holder.address, 100, false);
+        .withArgs(seed, artist.address, holder.address, 100);
     });
     it("works with 0 price", async () => {
       const { sm, artist, holder, seed, qql, mp } = await setUp();
@@ -320,7 +320,7 @@ describe("SeedMarket", () => {
       const go = sm.connect(holder).fillListing(seed, 1);
       await expect(go)
         .to.emit(sm, "Trade")
-        .withArgs(seed, artist.address, holder.address, 0, false);
+        .withArgs(seed, artist.address, holder.address, 0);
     });
     it("works with nonzero price", async () => {
       const { sm, artist, holder, seed, qql, mp } = await setUp();
@@ -328,7 +328,7 @@ describe("SeedMarket", () => {
       const go = sm.connect(holder).fillListing(seed, 1, { value: 100 });
       await expect(go)
         .to.emit(sm, "Trade")
-        .withArgs(seed, artist.address, holder.address, 100, false);
+        .withArgs(seed, artist.address, holder.address, 100);
     });
     it("mints the corresponding QQL", async () => {
       const { sm, artist, holder, seed, qql, mp } = await setUp();
@@ -365,20 +365,6 @@ describe("SeedMarket", () => {
         ethers.constants.AddressZero,
         BN.from(100),
       ]);
-    });
-  });
-  describe("bid", async () => {
-    it("does not require the seed to be blessed", async () => {
-      //
-    });
-    it("emits a Bid event", async () => {
-      //
-    });
-    it("subsequent bids override prior bids", async () => {
-      //
-    });
-    it("unbid works", async () => {
-      //
     });
   });
 });

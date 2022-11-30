@@ -366,5 +366,21 @@ describe("SeedMarket", () => {
         BN.from(100),
       ]);
     });
+    it("fails on a de-listed seed", async () => {
+      const { sm, artist, holder, seed, qql, mp } = await setUp();
+      await sm.connect(artist).blessAndList(seed, 12, { value: DEFAULT_FEE });
+      await sm.connect(artist).delist(seed);
+      const fail = sm.connect(holder).fillListing(seed, 1);
+      await expect(fail).to.be.revertedWith("unlisted seed");
+    });
+    it("works on a repriced seed", async () => {
+      const { sm, artist, holder, seed, qql, mp } = await setUp();
+      await sm.connect(artist).blessAndList(seed, 12, { value: DEFAULT_FEE });
+      await sm.connect(artist).reprice(seed, 13);
+      const go = sm.connect(holder).fillListing(seed, 1, { value: 13 });
+      await expect(go)
+        .to.emit(sm, "Trade")
+        .withArgs(seed, artist.address, holder.address, 13);
+    });
   });
 });

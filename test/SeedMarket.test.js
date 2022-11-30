@@ -336,6 +336,17 @@ describe("SeedMarket", () => {
       await sm.connect(holder).fillListing(seed, 1, { value: 100 });
       expect(await qql.tokenSeed(1)).to.equal(seed);
     });
+    it("the minter must be approvedOrOwner for the mint pass being used", async () => {
+      const { sm, artist, holder, alice, seed, qql, mp } = await setUp();
+      await sm.connect(artist).blessAndList(seed, 100, { value: DEFAULT_FEE });
+      const fail1 = sm.connect(alice).fillListing(seed, 1, { value: 100 });
+      await expect(fail1).to.be.revertedWith("not owner or approved for pass");
+      const fail2 = sm.connect(alice).fillListing(seed, 2, { value: 100 });
+      await expect(fail2).to.be.revertedWith("QQL: unauthorized for pass");
+      await mp.connect(alice).setApprovalForAll(sm.address, true);
+      await sm.connect(alice).fillListing(seed, 2, { value: 100 });
+      expect(await qql.tokenSeed(1)).to.equal(seed);
+    });
     it("pays the seed lister", async () => {
       const { sm, artist, holder, seed, qql, mp } = await setUp();
       await sm.connect(artist).blessAndList(seed, 100, { value: DEFAULT_FEE });

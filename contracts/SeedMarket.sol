@@ -33,7 +33,7 @@ contract SeedMarket is Ownable {
         address indexed buyer,
         uint256 price
     );
-    event Listing(bytes32 indexed seed, address indexed lister, uint96 price);
+    event Listing(bytes32 indexed seed, address indexed lister, uint256 price);
     event Delisting(bytes32 indexed seed);
 
     constructor(
@@ -72,7 +72,7 @@ contract SeedMarket is Ownable {
         blessed_[seed] = true;
     }
 
-    function blessAndList(bytes32 seed, uint96 price) external payable {
+    function blessAndList(bytes32 seed, uint256 price) external payable {
         bless(seed);
         list(seed, price);
     }
@@ -81,12 +81,14 @@ contract SeedMarket is Ownable {
         return blessed_[seed];
     }
 
-    function list(bytes32 seed, uint96 price) public payable {
+    function list(bytes32 seed, uint256 price) public payable {
         if (!qql_.isApprovedOrOwnerForSeed(msg.sender, seed))
             revert("SeedMarket: unauthorized");
         if (!blessed_[seed]) revert("SeedMarket: must bless to list");
         qql_.transferSeed(qql_.ownerOfSeed(seed), address(this), seed);
-        listings_[seed] = ListingData({lister: msg.sender, price: price});
+        uint96 price96 = uint96(price);
+        if (price96 != price) revert("SeedMarket: price too high");
+        listings_[seed] = ListingData({lister: msg.sender, price: price96});
         emit Listing(seed, msg.sender, price);
     }
 
@@ -99,10 +101,11 @@ contract SeedMarket is Ownable {
         return (lst.lister, uint256(lst.price));
     }
 
-    function reprice(bytes32 seed, uint96 price) external {
+    function reprice(bytes32 seed, uint256 price) external {
         ListingData memory lst = listings_[seed];
         if (lst.lister != msg.sender) revert("SeedMarket: unauthorized");
-        lst.price = price;
+        lst.price = uint96(price);
+        if (lst.price != price) revert("SeedMarket: price too high");
         listings_[seed] = lst;
         emit Listing(seed, msg.sender, price);
     }

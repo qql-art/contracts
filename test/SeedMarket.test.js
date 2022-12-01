@@ -273,7 +273,7 @@ describe("SeedMarket", () => {
       await sm.connect(artist).delist(seed);
       expect(await sm.getListing(seed)).to.deep.equal([
         ethers.constants.AddressZero,
-        BN.from(12),
+        ethers.constants.Zero,
       ]);
     });
     it("seed is transferred back to the lister", async () => {
@@ -382,7 +382,7 @@ describe("SeedMarket", () => {
       const listing = await sm.getListing(seed);
       expect(await sm.getListing(seed)).to.deep.equal([
         ethers.constants.AddressZero,
-        BN.from(100),
+        ethers.constants.Zero,
       ]);
     });
     it("fails on a de-listed seed", async () => {

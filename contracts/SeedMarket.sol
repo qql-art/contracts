@@ -113,7 +113,7 @@ contract SeedMarket is Ownable {
     function delist(bytes32 seed) external {
         if (listings_[seed].lister != msg.sender)
             revert("SeedMarket: unauthorized");
-        delete listings_[seed].lister;
+        delete listings_[seed];
         qql_.transferSeed(address(this), msg.sender, seed);
         emit Delisting(seed);
     }
@@ -126,7 +126,7 @@ contract SeedMarket is Ownable {
         if (msg.value != price) revert("SeedMarket: incorrect payment");
         if (!pass_.isApprovedOrOwner(msg.sender, mintPassId))
             revert("SeedMarket: not owner or approved for pass");
-        delete listings_[seed].lister;
+        delete listings_[seed];
         qql_.transferSeed(address(this), msg.sender, seed);
         emit Trade(seed, lister, msg.sender, price);
         // Careful: invokes ERC721 received hook for buyer

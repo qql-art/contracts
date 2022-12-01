@@ -187,6 +187,17 @@ describe("SeedMarket", () => {
       const fail = sm.connect(artist).list(seed, 12, { value: DEFAULT_FEE });
       await expect(fail).to.be.revertedWith("unauthorized");
     });
+    it("reverts if the price exceeds the range of a uint96", async () => {
+      const { owner, sm, artist, seed, qql } = await setUp();
+      const price = BN.from(2).pow(96);
+      const fail = sm
+        .connect(artist)
+        .blessAndList(seed, price, { value: DEFAULT_FEE });
+      await expect(fail).to.be.revertedWith("price too high");
+      await sm
+        .connect(artist)
+        .blessAndList(seed, price.sub(1), { value: DEFAULT_FEE }); // ok
+    });
     it("reverts if sender is not seed owner or operator", async () => {
       // nb. use parametric artist as the test case
       const { owner, sm, artist, alice, seed, qql } = await setUp();
@@ -238,6 +249,14 @@ describe("SeedMarket", () => {
       await sm.connect(alice).blessAndList(seed, 12, { value: DEFAULT_FEE });
       const fail = sm.connect(artist).reprice(seed, 12);
       await expect(fail).to.be.revertedWith("unauthorized");
+    });
+    it("fails if the new price exceeds the range of a uint96", async () => {
+      const { owner, sm, artist, seed, qql } = await setUp();
+      await sm.connect(artist).blessAndList(seed, 12, { value: DEFAULT_FEE });
+      const price = BN.from(2).pow(96);
+      const fail = sm.connect(artist).reprice(seed, price);
+      await expect(fail).to.be.revertedWith("price too high");
+      await expect(sm.connect(artist).reprice(seed, price.sub(1))); // ok
     });
   });
 

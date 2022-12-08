@@ -136,4 +136,13 @@ contract SeedMarket is Ownable {
             payable(lister).transfer(price);
         }
     }
+
+    /// Sends a seed that's been accidentally transferred directly to this
+    /// contract back to the original artist.
+    function rescue(bytes32 seed) external {
+        if (listings_[seed].lister != address(0))
+            revert("SeedMarket: seed is listed");
+        address artist = address(bytes20(seed));
+        qql_.transferSeed(address(this), artist, seed);
+    }
 }

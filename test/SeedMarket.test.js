@@ -402,4 +402,36 @@ describe("SeedMarket", () => {
         .withArgs(seed, artist.address, holder.address, 13);
     });
   });
+
+  describe("rescue", async () => {
+    it("can rescue a seed that was transferred in", async () => {
+      const { sm, artist, alice, seed, qql } = await setUp();
+      await qql.connect(artist).transferSeed(artist.address, sm.address, seed);
+      await sm.connect(alice).rescue(seed); // rescuer is a third party
+      expect(await qql.ownerOfSeed(seed)).to.equal(artist.address);
+    });
+    it("cannot rescue a listed seed", async () => {
+      const { sm, artist, alice, seed, qql } = await setUp();
+      await qql
+        .connect(artist)
+        .transferSeed(artist.address, alice.address, seed);
+      await qql.connect(alice).approveForAllSeeds(sm.address, true);
+      const go = sm
+        .connect(alice)
+        .blessAndList(seed, 12, { value: DEFAULT_FEE });
+      const fail = sm.connect(artist).rescue(seed);
+      await expect(fail).to.be.revertedWith("seed is listed");
+    });
+    it("cannot rescue a de-listed seed", async () => {
+      const { sm, artist, alice, seed, qql } = await setUp();
+      await qql
+        .connect(artist)
+        .transferSeed(artist.address, alice.address, seed);
+      await qql.connect(alice).approveForAllSeeds(sm.address, true);
+      await sm.connect(alice).blessAndList(seed, 12, { value: DEFAULT_FEE });
+      await sm.connect(alice).delist(seed);
+      const fail = sm.connect(artist).rescue(seed);
+      await expect(fail).to.be.revertedWith("wrong owner for seed");
+    });
+  });
 });

@@ -8,12 +8,10 @@ describe("SeedMarket", () => {
   let MintPass;
   let QQL;
   let SeedMarket;
-  let TestWeth;
   before(async () => {
     MintPass = await ethers.getContractFactory("MintPass");
     QQL = await ethers.getContractFactory("QQL");
     SeedMarket = await ethers.getContractFactory("SeedMarket");
-    TestWeth = await ethers.getContractFactory("TestWeth");
   });
 
   function generateSeed(address, rest) {
@@ -28,13 +26,7 @@ describe("SeedMarket", () => {
 
     const mp = await MintPass.deploy(2);
     const qql = await QQL.deploy(mp.address, 0, 0);
-    const weth = await TestWeth.deploy();
-    const sm = await SeedMarket.deploy(
-      qql.address,
-      mp.address,
-      weth.address,
-      DEFAULT_FEE
-    );
+    const sm = await SeedMarket.deploy(qql.address, mp.address, DEFAULT_FEE);
     await mp.setBurner(qql.address);
     await mp.reserve(holder.address, 1);
     await mp.reserve(alice.address, 1);
@@ -45,7 +37,6 @@ describe("SeedMarket", () => {
     return {
       mp,
       qql,
-      weth,
       sm,
       owner,
       artist,

@@ -7,7 +7,6 @@ import "@openzeppelin/contracts/utils/structs/EnumerableMap.sol";
 
 import "./MintPass.sol";
 import "./QQL.sol";
-import "./IWeth.sol";
 
 struct ListingData {
     address lister;
@@ -19,7 +18,6 @@ contract SeedMarket is Ownable {
 
     QQL immutable qql_;
     MintPass immutable pass_;
-    IWeth immutable weth_;
     uint256 blessingFee_;
 
     mapping(bytes32 => bool) blessed_;
@@ -39,12 +37,10 @@ contract SeedMarket is Ownable {
     constructor(
         QQL _qql,
         MintPass _pass,
-        IWeth _weth,
         uint256 blessingFee
     ) {
         qql_ = _qql;
         pass_ = _pass;
-        weth_ = _weth;
         blessingFee_ = blessingFee;
         emit BlessingFeeUpdate(0, blessingFee);
     }

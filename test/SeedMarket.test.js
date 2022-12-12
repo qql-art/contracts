@@ -122,6 +122,12 @@ describe("SeedMarket", () => {
       await sm.setBlessingFee(0);
       await sm.connect(artist).bless(seed);
     });
+    it("fee can be retrieved", async () => {
+      const { owner, sm, artist, seed } = await setUp();
+      expect(await sm.blessingFee()).to.equal(DEFAULT_FEE);
+      await sm.setBlessingFee(150);
+      expect(await sm.blessingFee()).to.equal(150);
+    });
   });
 
   describe("list", async () => {

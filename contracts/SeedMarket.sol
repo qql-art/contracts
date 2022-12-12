@@ -37,17 +37,17 @@ contract SeedMarket is Ownable {
     constructor(
         QQL _qql,
         MintPass _pass,
-        uint256 blessingFee
+        uint256 _blessingFee
     ) {
         qql_ = _qql;
         pass_ = _pass;
-        blessingFee_ = blessingFee;
-        emit BlessingFeeUpdate(0, blessingFee);
+        blessingFee_ = _blessingFee;
+        emit BlessingFeeUpdate(0, _blessingFee);
     }
 
-    function setBlessingFee(uint256 blessingFee) external onlyOwner {
-        emit BlessingFeeUpdate(blessingFee_, blessingFee);
-        blessingFee_ = blessingFee;
+    function setBlessingFee(uint256 _blessingFee) external onlyOwner {
+        emit BlessingFeeUpdate(blessingFee_, _blessingFee);
+        blessingFee_ = _blessingFee;
     }
 
     function isSeedOperatorOrParametricArtist(address operator, bytes32 seed)
@@ -57,6 +57,10 @@ contract SeedMarket is Ownable {
     {
         if (operator == address(bytes20(seed))) return true;
         return qql_.isApprovedOrOwnerForSeed(operator, seed);
+    }
+
+    function blessingFee() external view returns (uint256) {
+        return blessingFee_;
     }
 
     function bless(bytes32 seed) public payable {

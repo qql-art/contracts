@@ -47,6 +47,7 @@ contract SeedMarket is Ownable {
         emit BlessingFeeUpdate(0, _blessingFee);
     }
 
+    /// Change the blessing fee. May only be called by the owner.
     function setBlessingFee(uint256 _blessingFee) external onlyOwner {
         emit BlessingFeeUpdate(blessingFee_, _blessingFee);
         blessingFee_ = _blessingFee;
@@ -61,10 +62,18 @@ contract SeedMarket is Ownable {
         return qql_.isApprovedOrOwnerForSeed(operator, seed);
     }
 
+    /// Returns the "blessing fee", which must be paid to "bless" a seed before it is listed
+    /// on the market. The fee is intended as a spam-prevention mechanism, and to pay the
+    /// server costs of generating and storing canonical renders of blessed seeds.
+    /// If interacting via etherscan: remember, this value is in wei, so 0.01E
+    /// would be 10000000000000000
     function blessingFee() external view returns (uint256) {
         return blessingFee_;
     }
 
+    /// Bless a seed, at which point the seed is canonically tracked as part of the seed
+    // marketplace and is available for listing. Blessing a seed does not also list it.
+    /// You can only bless a seed if you either own it, or were the parametric artist for it.
     function bless(bytes32 seed) public payable {
         if (!isSeedOperatorOrParametricArtist(msg.sender, seed))
             revert("SeedMarket: unauthorized");
@@ -74,15 +83,23 @@ contract SeedMarket is Ownable {
         blessed_[seed] = true;
     }
 
+    /// Bless a seed and simultaneously list it on the Seed Marketplace.
+    /// See docs on `bless` and `list`.
     function blessAndList(bytes32 seed, uint256 price) external payable {
         bless(seed);
         list(seed, price);
     }
 
+    /// Check whether a seed has been blessed
     function isBlessed(bytes32 seed) external view returns (bool) {
         return blessed_[seed];
     }
 
+    /// List a seed on the marketplace, specifying a price.
+    /// Someone who wants to use the seed can trustlessly mint it using their own
+    /// QQL mint pass, provided that they transfer you `price`.
+    /// If using this function on etherscan: remember that price is wei, so
+    /// 1 ether would be 1000000000000000000
     function list(bytes32 seed, uint256 price) public payable {
         if (!qql_.isApprovedOrOwnerForSeed(msg.sender, seed))
             revert("SeedMarket: unauthorized");
@@ -94,6 +111,8 @@ contract SeedMarket is Ownable {
         emit Listing(seed, msg.sender, price);
     }
 
+    /// Retrieve the listing for a given seed (if it exists). Returns it as being
+    /// listed by the zero address if unlisted.
     function getListing(bytes32 seed)
         external
         view
@@ -103,6 +122,7 @@ contract SeedMarket is Ownable {
         return (lst.lister, uint256(lst.price));
     }
 
+    /// Change the price for a listed seed.
     function reprice(bytes32 seed, uint256 price) external {
         ListingData memory lst = listings_[seed];
         if (lst.lister != msg.sender) revert("SeedMarket: unauthorized");
@@ -112,6 +132,9 @@ contract SeedMarket is Ownable {
         emit Listing(seed, msg.sender, price);
     }
 
+    /// Remove the listing for a listed seed, making it no longer available for sale on the
+    /// market. May only be called by the address that listed that seed. The seed will remain
+    /// blessed
     function delist(bytes32 seed) external {
         if (listings_[seed].lister != msg.sender)
             revert("SeedMarket: unauthorized");
@@ -120,6 +143,9 @@ contract SeedMarket is Ownable {
         emit Delisting(seed);
     }
 
+    /// Fill a listing, purchasing a seed from the marketplace and using it to mint a QQL.
+    /// This is called by the seed purchaser. They must pay the requested amount by the seed
+    /// lister, and must have access to a mint pass.
     function fillListing(bytes32 seed, uint256 mintPassId) external payable {
         ListingData memory lst = listings_[seed];
         address payable lister = payable(lst.lister);

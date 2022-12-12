@@ -236,6 +236,60 @@ TEST_CASES.push(async function* scriptPieces(props) {
   ];
 });
 
+TEST_CASES.push(async function* seedMarket(props) {
+  const [owner, alice, bob] = props.signers;
+
+  const mp = await props.factories.MintPass.deploy(999);
+  const qql = await props.factories.QQL.deploy(mp.address, 999, 0);
+  await mp.setBurner(qql.address);
+  const sm = await props.factories.SeedMarket.deploy(
+    qql.address,
+    mp.address,
+    1000
+  );
+  await mp.reserve(bob.address, 1);
+  await qql.connect(alice).approveForAllSeeds(sm.address, true);
+  function generateSeed(address, rest) {
+    return ethers.utils.solidityPack(["address", "uint96"], [address, rest]);
+  }
+  const seed1 = generateSeed(alice.address, 1);
+
+  yield [
+    "SeedMarket: bless a seed",
+    await sm
+      .connect(alice)
+      .bless(seed1, { value: 1000 })
+      .then((tx) => tx.wait()),
+  ];
+
+  yield [
+    "SeedMarket: list a seed",
+    await sm
+      .connect(alice)
+      .list(seed1, 100)
+      .then((tx) => tx.wait()),
+  ];
+
+  const seed2 = generateSeed(alice.address, 2);
+  yield [
+    "SeedMarket: bless and list a seed",
+    await sm
+      .connect(alice)
+      .blessAndList(seed2, 200, { value: 1000 })
+      .then((tx) => tx.wait()),
+  ];
+
+  await mp.connect(bob).setApprovalForAll(sm.address, true);
+
+  yield [
+    "SeedMarket: fill a listing",
+    await sm
+      .connect(bob)
+      .fillListing(seed2, 1, { value: 200 })
+      .then((tx) => tx.wait()),
+  ];
+});
+
 const Mode = Object.freeze({
   TEXT: "TEXT",
   JSON: "JSON",
@@ -254,6 +308,7 @@ async function main() {
     "Shardwallet",
     "ShardwalletFactory",
     "TestERC20",
+    "SeedMarket",
   ];
   const factories = {};
   await Promise.all(

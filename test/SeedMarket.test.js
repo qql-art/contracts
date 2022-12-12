@@ -122,11 +122,28 @@ describe("SeedMarket", () => {
       await sm.setBlessingFee(0);
       await sm.connect(artist).bless(seed);
     });
-    it("fee can be retrieved", async () => {
+    it("current fee value can be accessed", async () => {
       const { owner, sm, artist, seed } = await setUp();
       expect(await sm.blessingFee()).to.equal(DEFAULT_FEE);
       await sm.setBlessingFee(150);
       expect(await sm.blessingFee()).to.equal(150);
+    });
+    it("accumulated fees can be withdrawan", async () => {
+      const { sm, artist, seed, seed2, bob } = await setUp();
+      await sm.connect(artist).bless(seed, { value: DEFAULT_FEE });
+      await sm.connect(artist).bless(seed2, { value: DEFAULT_FEE });
+      const priorBalance = await bob.getBalance();
+      await expect(sm.withdraw(bob.address))
+        .to.emit(sm, "Withdrawal")
+        .withArgs(DEFAULT_FEE * 2, bob.address);
+      const afterBalance = await bob.getBalance();
+      const delta = afterBalance.sub(priorBalance);
+      expect(delta).to.equal(BN.from(DEFAULT_FEE * 2));
+    });
+    it("only owner may withdraw fees", async () => {
+      const { sm, artist, seed, seed2, bob } = await setUp();
+      const fail = sm.connect(bob).withdraw(bob.address);
+      await expect(fail).to.be.revertedWith("Ownable");
     });
   });
 

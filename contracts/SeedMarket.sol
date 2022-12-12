@@ -36,6 +36,9 @@ contract SeedMarket is Ownable {
     event Listing(bytes32 indexed seed, address indexed lister, uint256 price);
     event Delisting(bytes32 indexed seed);
 
+    /// Emitted when the contract owner withdraws accumulated fees
+    event Withdrawal(uint256 amount, address indexed recipient);
+
     constructor(
         QQL _qql,
         MintPass _pass,
@@ -172,5 +175,11 @@ contract SeedMarket is Ownable {
             revert("SeedMarket: seed is listed");
         address artist = address(bytes20(seed));
         qql_.transferSeed(address(this), artist, seed);
+    }
+
+    function withdraw(address payable recipient) external onlyOwner {
+        uint256 balance = address(this).balance;
+        emit Withdrawal(balance, recipient);
+        recipient.sendValue(balance);
     }
 }

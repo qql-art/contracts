@@ -26,7 +26,7 @@ contract SeedMarket is Ownable {
     mapping(bytes32 => ListingData) listings_;
 
     event BlessingFeeUpdate(uint256 oldFee, uint256 newFee);
-    event Blessing(bytes32 indexed seed, address cleric);
+    event Blessing(bytes32 indexed seed, address indexed cleric);
     event Trade(
         bytes32 indexed seed,
         address indexed seller,

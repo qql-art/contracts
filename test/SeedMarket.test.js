@@ -135,7 +135,7 @@ describe("SeedMarket", () => {
       const priorBalance = await bob.getBalance();
       await expect(sm.withdraw(bob.address))
         .to.emit(sm, "Withdrawal")
-        .withArgs(DEFAULT_FEE * 2, bob.address);
+        .withArgs(bob.address, DEFAULT_FEE * 2);
       const afterBalance = await bob.getBalance();
       const delta = afterBalance.sub(priorBalance);
       expect(delta).to.equal(BN.from(DEFAULT_FEE * 2));

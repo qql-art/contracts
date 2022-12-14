@@ -37,7 +37,7 @@ contract SeedMarket is Ownable {
     event Delisting(bytes32 indexed seed);
 
     /// Emitted when the contract owner withdraws accumulated fees
-    event Withdrawal(uint256 amount, address indexed recipient);
+    event Withdrawal(address indexed recipient, uint256 amount);
 
     constructor(
         QQL _qql,
@@ -179,7 +179,7 @@ contract SeedMarket is Ownable {
 
     function withdraw(address payable recipient) external onlyOwner {
         uint256 balance = address(this).balance;
-        emit Withdrawal(balance, recipient);
+        emit Withdrawal(recipient, balance);
         recipient.sendValue(balance);
     }
 }

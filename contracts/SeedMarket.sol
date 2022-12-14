@@ -14,6 +14,9 @@ struct ListingData {
     uint96 price;
 }
 
+/// @title A market for QQL seeds
+/// @author Dandelion Wist & William Chargin
+/// @notice This contract is used to list QQL seeds for sale, to be used by a QQL mint pass holder to mint the corresponding seed.
 contract SeedMarket is Ownable {
     using EnumerableMap for EnumerableMap.AddressToUintMap;
     using Address for address payable;

@@ -75,7 +75,7 @@ contract SeedMarket is Ownable {
     }
 
     /// Bless a seed, at which point the seed is canonically tracked as part of the seed
-    // marketplace and is available for listing. Blessing a seed does not also list it.
+    /// marketplace and is available for listing. Blessing a seed does not also list it.
     /// You can only bless a seed if you either own it, or were the parametric artist for it.
     function bless(bytes32 seed) public payable {
         if (!isSeedOperatorOrParametricArtist(msg.sender, seed))
@@ -100,10 +100,10 @@ contract SeedMarket is Ownable {
 
     /// List a seed on the marketplace, specifying a price.
     /// Someone who wants to use the seed can trustlessly mint it using their own
-    /// QQL mint pass, provided that they transfer you `price`.
+    /// QQL mint pass, provided that they transfer you the requested `price`.
     /// If using this function on etherscan: remember that price is wei, so
     /// 1 ether would be 1000000000000000000
-    function list(bytes32 seed, uint256 price) public payable {
+    function list(bytes32 seed, uint256 price) public {
         if (!qql_.isApprovedOrOwnerForSeed(msg.sender, seed))
             revert("SeedMarket: unauthorized");
         if (!blessed_[seed]) revert("SeedMarket: must bless to list");

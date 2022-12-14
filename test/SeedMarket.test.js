@@ -198,7 +198,7 @@ describe("SeedMarket", () => {
     it("reverts if the piece is already listed", async () => {
       const { owner, sm, artist, seed, qql } = await setUp();
       await sm.connect(artist).blessAndList(seed, 12, { value: DEFAULT_FEE });
-      const fail = sm.connect(artist).list(seed, 12, { value: DEFAULT_FEE });
+      const fail = sm.connect(artist).list(seed, 12);
       await expect(fail).to.be.revertedWith("unauthorized");
     });
     it("reverts if the price exceeds the range of a uint96", async () => {

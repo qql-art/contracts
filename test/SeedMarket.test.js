@@ -415,6 +415,17 @@ describe("SeedMarket", () => {
         .to.emit(sm, "Trade")
         .withArgs(seed, artist.address, holder.address, 13);
     });
+    it("fails on an already-minted seed", async () => {
+      const { sm, alice, holder, qql, mp } = await setUp();
+      const seed = generateSeed(holder.address, 0);
+      await qql.connect(holder).mint(1, seed);
+      await qql.connect(holder).approveForAllSeeds(sm.address, true);
+      await mp.connect(alice).setApprovalForAll(sm.address, true);
+      // Anomalous behavior; listing the minted seed should be impossible
+      await sm.connect(holder).blessAndList(seed, 100, { value: DEFAULT_FEE });
+      const fail = sm.connect(alice).fillListing(seed, 2, { value: 100 });
+      await expect(fail).to.be.revertedWith("QQL: seed already used");
+    });
   });
 
   describe("rescue", async () => {
